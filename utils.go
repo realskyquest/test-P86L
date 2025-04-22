@@ -27,10 +27,10 @@ import (
 	"github.com/hajimehoshi/guigui"
 )
 
-func RemoveLineBreaks(input string) string {
-	input = strings.ReplaceAll(input, "\n", "")
-	input = strings.ReplaceAll(input, "\r", "")
-	return input
+func RemoveLineBreaks(text string) string {
+	text = strings.ReplaceAll(text, "\n", "")
+	text = strings.ReplaceAll(text, "\r", "")
+	return text
 }
 
 func WrapText(context *guigui.Context, input string, maxWidth int) string {
