@@ -99,6 +99,9 @@ func Run() *debug.Error {
 			if err.Err != nil {
 				app.Debug.SetToast(err)
 			}
+			if err.Message != "" {
+				log.Info().Msg(err.Message)
+			}
 		}
 	}()
 

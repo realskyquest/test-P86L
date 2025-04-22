@@ -60,10 +60,10 @@ func (c *Changelog) Layout(context *guigui.Context, appender *guigui.ChildWidget
 	guigui.SetPosition(&c.vLayout, pt)
 
 	if app.Cache.Changelog != nil {
-		changelogTextData := WrapText(context, app.Cache.Changelog.Body, w-int(1*u))
+		changelogTextData := TextWrap(context, app.Cache.Changelog.Body, w-int(1*u))
 		c.changelogText.SetText(changelogTextData)
 	} else {
-		c.changelogText.SetText("NO INTERNET")
+		c.changelogText.SetText(TextWrap(context, "", w-int(1*u)))
 	}
 
 	c.changelogButton.SetText("View changelog")

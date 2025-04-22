@@ -221,13 +221,16 @@ func (r *Root) Update(context *guigui.Context) error {
 		r.lastCheckInternet = now
 	}
 
-	err = app.Cache.UpdateCache(app.Debug, app.IsInternet(), githubClient, githubContext)
-	if err.Err != nil {
-		app.Debug.SetToast(err)
-	}
-	if err.Message != "" {
-		log.Info().Msg(err.Message)
-	}
+	// if app.IsInternet() {
+	// 	log.Info().Msg("WORKING")
+	// 	err = app.Cache.UpdateCache(app.Debug, githubClient, githubContext)
+	// 	if err.Err != nil {
+	// 		app.Debug.SetToast(err)
+	// 	}
+	// 	if err.Message != "" {
+	// 		log.Info().Msg(err.Message)
+	// 	}
+	// }
 
 	return nil
 }

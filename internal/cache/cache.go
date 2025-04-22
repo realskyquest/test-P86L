@@ -92,6 +92,9 @@ func (c *Cache) InitChangelog(appDebug *debug.Debug, githubClient *github.Client
 			return appDebug.New(err, debug.CacheError, debug.ErrChangelogLoad)
 		}
 		c.Changelog = changelogData
+		if time.Since(c.Changelog.Timestamp) < c.Changelog.ExpiresIn {
+			return appDebug.New(nil, debug.UnknownError, debug.ErrUnknown, "Changelog cache not expired")
+		}
 	} else {
 		changelogData, _err := c.requestChangelog(githubClient, context)
 		if _err != nil {
@@ -108,23 +111,28 @@ func (c *Cache) InitChangelog(appDebug *debug.Debug, githubClient *github.Client
 	return appDebug.New(nil, debug.UnknownError, debug.ErrUnknown)
 }
 
-func (c *Cache) UpdateCache(appDebug *debug.Debug, internet bool, githubClient *github.Client, context context.Context) *debug.Error {
-	if internet {
-		if time.Since(c.Changelog.Timestamp) > c.Changelog.ExpiresIn {
-			changelogData, _err := c.requestChangelog(githubClient, context)
-			if _err != nil {
-				return appDebug.New(_err, debug.InternetError, debug.ErrChangelogNetwork)
-			}
-			c.Changelog = &changelogData
+func (c *Cache) UpdateCache(appDebug *debug.Debug, githubClient *github.Client, context context.Context) *debug.Error {
+	// if internet && c.Changelog != nil {
+	// 	if time.Since(c.Changelog.Timestamp) > c.Changelog.ExpiresIn {
+	// 		changelogData, _err := c.requestChangelog(githubClient, context)
+	// 		if _err != nil {
+	// 			return appDebug.New(_err, debug.InternetError, debug.ErrChangelogNetwork)
+	// 		}
+	// 		c.Changelog = &changelogData
+	//
+	// 		err := c.saveChangelog(appDebug)
+	// 		if err != nil {
+	// 			return err
+	// 		}
+	//
+	// 		return appDebug.New(nil, debug.UnknownError, debug.ErrUnknown, "Changelog cache updated")
+	// 	}
+	// }
 
-			err := c.saveChangelog(appDebug)
-			if err != nil {
-				return err
-			}
-
-			return appDebug.New(nil, debug.UnknownError, debug.ErrUnknown, "Changelog cache updated")
-		}
+	if c.Changelog != nil {
+		return appDebug.New(nil, debug.UnknownError, debug.ErrUnknown, "Changelog cache updated")
 	}
+
 	return appDebug.New(nil, debug.UnknownError, debug.ErrUnknown)
 }
 
