@@ -183,7 +183,7 @@ func (r *Root) Build(context *guigui.Context, appender *guigui.ChildWidgetAppend
 		Min: popupPosition,
 		Max: popupPosition.Add(contentSize),
 	}
-	context.SetSize(&r.popupContent, popupBounds.Size())
+	context.SetSize(&r.popupContent, popupBounds.Size(), r)
 	appender.AppendChildWidgetWithBounds(&r.popup, popupBounds)
 
 	return nil
@@ -268,7 +268,7 @@ func (r *rootBackground) Build(context *guigui.Context, appender *guigui.ChildWi
 		availableWidth = int(float64(newHeight) / aspectRatio)
 	}
 
-	context.SetSize(&r.bgImage, image.Pt(availableWidth+2, newHeight+2))
+	context.SetSize(&r.bgImage, image.Pt(availableWidth+2, newHeight+2), r)
 
 	yOffset := 0
 	if newHeight > windowSize.Y {

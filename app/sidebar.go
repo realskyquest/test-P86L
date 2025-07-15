@@ -52,7 +52,7 @@ func (s *Sidebar) Build(context *guigui.Context, appender *guigui.ChildWidgetApp
 	s.panel.SetBorder(basicwidget.PanelBorder{
 		End: true,
 	})
-	context.SetSize(&s.panelContent, context.ActualSize(s))
+	context.SetSize(&s.panelContent, context.ActualSize(s), s)
 	s.panel.SetContent(&s.panelContent)
 
 	appender.AppendChildWidgetWithBounds(&s.panel, context.Bounds(s))
