@@ -1,4 +1,4 @@
-version: '3'
+version: "3"
 
 vars:
   VERSION:
@@ -11,12 +11,16 @@ tasks:
 
   run:debug:
     cmds:
-      - GUIGUI_DEBUG=showrenderingregions go run ./cmd/p86l
+      - P86L_DEBUG=logs go run ./cmd/p86l
 
-  build:
+  build:debug:
     cmds:
-      - go build -ldflags "-s -w -X main.AppBuild=release" -o ./bin/ ./cmd/p86l
+      - go build -tags release -ldflags "-s -w" -trimpath -o ./bin/ ./cmd/p86l
 
   build:windows:
     cmds:
-      - GOOS=windows GOARCH=amd64 go build -ldflags "-s -w -X main.AppBuild=release -X=runtime.godebugDefault=asyncpreemptoff=1 -H=windowsgui" -o ./bin/Project-86-Launcher-{{.VERSION}}.exe ./cmd/p86l
+      - GOOS=windows GOARCH=amd64 go build -tags 'release' -ldflags "-s -w -X main.version={{.VERSION}} -X=runtime.godebugDefault=asyncpreemptoff=1 -H=windowsgui" -trimpath -o ./bin/Project-86-Launcher-{{.VERSION}}.exe ./cmd/p86l
+
+  build:windows-cjk:
+    cmds:
+      - GOOS=windows GOARCH=amd64 go build -tags 'release,cjk' -ldflags "-s -w -X main.version={{.VERSION}} -X=runtime.godebugDefault=asyncpreemptoff=1 -H=windowsgui" -trimpath -o ./bin/Project-86-Launcher-cjk-{{.VERSION}}.exe ./cmd/p86l

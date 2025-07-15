@@ -22,56 +22,101 @@
 package debug
 
 import (
+	"fmt"
+
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
+)
+
+const (
+	ErrorManager   = "ErrorManager"
+	FileManager    = "FileManager"
+	NetworkManager = "NetworkManager"
 )
 
 type ErrorType string
 
 const (
-	UnknownError  ErrorType = "unknown"
-	AppError      ErrorType = "app"
-	FSError       ErrorType = "filesystem"
-	InternetError ErrorType = "internet"
-	DataError     ErrorType = "data"
-	CacheError    ErrorType = "cache"
+	UnknownError ErrorType = "unknown"
+	AppError     ErrorType = "app"
+	FSError      ErrorType = "filesystem"
+	DataError    ErrorType = "data"
+	CacheError   ErrorType = "cache"
+	NetworkError ErrorType = "network"
 )
 
 const (
 	// App errors (1001-1999)
 	ErrUnknown int = iota + 1001
 	ErrBrowserOpen
+	ErrGameVersionInvalid
+	ErrGameNotExist
+)
 
+const (
 	// Filesystem errors (2001-2999)
-	ErrGDataOpenFailed int = iota + 2001
-	ErrIconNotFound
-	ErrDirNotFound
-	ErrNewDirFailed
-	ErrNewFileFailed
-	ErrOpenFolderFailed
-	ErrFileNotFound
-	ErrFolderClear
+	ErrFSOpenFileManagerInvalid int = iota + 2001
 
+	ErrFSDirInvalid
+	ErrFSDirNew
+	ErrFSDirNotExist
+	ErrFSDirRead
+	ErrFSDirRename
+	ErrFSDirRemove
+
+	ErrFSFileInvalid
+	ErrFSNewFileInvalid
+	ErrFSFileWrite
+	ErrFSFileNotExist
+
+	// -- root --
+
+	ErrFSRootInvalid
+
+	ErrFSRootDirInvalid
+	ErrFSRootDirNew
+
+	ErrFSRootFileInvalid
+	ErrFSRootFileNew
+	ErrFSRootFileNotExist
+	ErrFSRootFileRead
+	ErrFSRootFileWrite
+	ErrFSRootFileRemove
+	ErrFSRootFileClose
+)
+
+const (
 	// Data errors (3001-3999)
-	ErrColorModeLoad int = iota + 3001
-	ErrAppScaleLoad
-	ErrColorModeSave
-	ErrAppScaleSave
-	ErrColorModeClear
-	ErrAppScaleClear
+	ErrDataLoad int = iota + 3001
+	ErrDataSave
+	ErrDataReset
+	ErrDataLocaleInvalid
+)
 
+const (
 	// Cache errors (4001-4999)
-	ErrChangelogLoad int = iota + 4001
-	ErrChangelogSave
-	ErrChangelogClear
-	ErrChangelogNetwork
+	ErrCacheLoad int = iota + 4001
+	ErrCacheSave
+	ErrCacheReset
+	ErrCacheInvalid
+	ErrCacheRepoInvalid
+	ErrCacheBodyInvalid
+	ErrCacheURLInvalid
+	ErrCacheAssetsInvalid
+)
+
+const (
+	// // Network errors (5001-5999)
+	ErrNetworkRateLimitInvalid int = iota + 5001
+	ErrNetworkCacheRequest
+	ErrNetworkDownloadRequest
+	ErrNetworkStatusNotOk
 )
 
 type Error struct {
-	Err     error
-	Type    ErrorType
-	Code    int
-	Message string
+	Err  error
+	Type ErrorType
+	Code int
 }
 
 type Debug struct {
@@ -79,20 +124,12 @@ type Debug struct {
 	PopupErr *Error
 }
 
-func (d *Debug) New(err error, errType ErrorType, code int, message ...string) *Error {
+func (d *Debug) New(err error, errType ErrorType, code int) *Error {
 	if err != nil {
 		return &Error{
-			Err:  errors.New(err.Error()),
+			Err:  errors.Wrap(err, "Debug"),
 			Type: errType,
 			Code: code,
-		}
-	}
-	if len(message) > 0 {
-		return &Error{
-			Err:     nil,
-			Type:    errType,
-			Code:    code,
-			Message: message[0],
 		}
 	}
 	return &Error{
@@ -102,98 +139,27 @@ func (d *Debug) New(err error, errType ErrorType, code int, message ...string) *
 	}
 }
 
+func (e *Error) String() string {
+	if e != nil {
+		return fmt.Sprintf("Code: ( %d ), Type: ( %s ), Err: ( %s )", e.Code, string(e.Type), e.Err.Error())
+	}
+	return ""
+}
+
+func (e *Error) LogErr(place, who string) {
+	log.Error().Int("Code", e.Code).Any("Type", e.Type).Err((e.Err)).Str(place, who).Msg(ErrorManager)
+}
+
+func (e *Error) LogErrStack(place, who string) {
+	log.Error().Stack().Int("Code", e.Code).Any("Type", e.Type).Err((e.Err)).Str(place, who).Msg(ErrorManager)
+}
+
 func (d *Debug) SetToast(err *Error) {
-	log.Error().Stack().Int("Code", err.Code).Str("Type", string(err.Type)).Err(err.Err).Msg("Toast error")
+	log.Warn().Stack().Int("Code", err.Code).Any("Type", err.Type).Err(err.Err).Str("Debug", "SetToast").Msg(ErrorManager)
 	d.ToastErr = err
 }
 
 func (d *Debug) SetPopup(err *Error) {
-	log.Error().Stack().Int("Code", err.Code).Str("Type", string(err.Type)).Err(err.Err).Msg("Toast error")
+	log.Warn().Stack().Int("Code", err.Code).Any("Type", err.Type).Err(err.Err).Str("Debug", "SetPopup").Msg(ErrorManager)
 	d.PopupErr = err
 }
-
-// const (
-// 	// Core launcher errors (1-99)
-// 	ErrLauncherInit    = 1
-// 	ErrLauncherUpdate  = 2
-// 	ErrConfigCorrupted = 3
-//
-// 	// Authentication errors (100-199)
-// 	ErrLoginFailed       = 100
-// 	ErrSessionExpired    = 101
-// 	ErrAccountLocked     = 102
-// 	ErrTwoFactorRequired = 103
-//
-// 	// Game library errors (200-299)
-// 	ErrLibraryCorrupted  = 200
-// 	ErrGameNotFound      = 201
-// 	ErrGameMetadataFetch = 202
-// 	ErrGameArtworkFetch  = 203
-//
-// 	// Download/installation errors (300-399)
-// 	ErrDownloadFailed    = 300
-// 	ErrInsufficientSpace = 301
-// 	ErrChecksumMismatch  = 302
-// 	ErrInstallCorrupted  = 303
-// 	ErrPatchFailed       = 304
-//
-// 	// Game execution errors (400-499)
-// 	ErrGameLaunchFailed  = 400
-// 	ErrMissingDependency = 401
-// 	ErrIncompatibleOS    = 402
-// 	ErrInsufficientHW    = 403
-//
-// 	// Network errors (500-599)
-// 	ErrServerUnavailable = 500
-// 	ErrConnectionLost    = 501
-// 	ErrSlowConnection    = 502
-// 	ErrCDNFailure        = 503
-//
-// 	// User profile errors (600-699)
-// 	ErrProfileCorrupted = 600
-// 	ErrSaveGameSync     = 601
-// 	ErrAchievementSync  = 602
-// 	ErrFriendListFetch  = 603
-//
-// 	// Store/purchase errors (700-799)
-// 	ErrPaymentFailed      = 700
-// 	ErrPurchaseIncomplete = 701
-// 	ErrEntitlementIssue   = 702
-// 	ErrStoreFetchFailed   = 703
-// )
-//
-// const (
-// 	// General errors (1-99)
-// 	ErrUnknown  = 1
-// 	ErrInternal = 2
-//
-// 	// Network errors (100-199)
-// 	ErrNetworkUnavailable = 100
-// 	ErrTimeoutExceeded    = 101
-// 	ErrBadResponse        = 102
-//
-// 	// Database errors (200-299)
-// 	ErrDBConnection    = 200
-// 	ErrQueryFailed     = 201
-// 	ErrRecordNotFound  = 202
-// 	ErrDuplicateRecord = 203
-//
-// 	// Validation errors (300-399)
-// 	ErrInvalidInput  = 300
-// 	ErrMissingField  = 301
-// 	ErrInvalidFormat = 302
-//
-// 	// Auth errors (400-499)
-// 	ErrUnauthorized = 400
-// 	ErrForbidden    = 401
-// 	ErrTokenExpired = 402
-//
-// 	// Filesystem errors (500-599)
-// 	ErrFileNotFound     = 500
-// 	ErrPermissionDenied = 501
-// 	ErrDiskFull         = 502
-//
-// 	// Cache errors (600-699)
-// 	ErrCacheMiss    = 600
-// 	ErrCacheExpired = 601
-// )

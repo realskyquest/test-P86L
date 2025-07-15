@@ -1,3 +1,6 @@
+//go:build cjk
+// +build cjk
+
 /*
  * SPDX-License-Identifier: GPL-3.0-only
  * SPDX-FileCopyrightText: 2025 Project 86 Community
@@ -19,24 +22,21 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-// SPDX-License-Identifier: Apache-2.0
-// SPDX-FileCopyrightText: 2025 Hajime Hoshi
-
-package widget
+package app
 
 import (
-	"github.com/hajimehoshi/guigui"
 	"github.com/hajimehoshi/guigui/basicwidget"
+	"github.com/hajimehoshi/guigui/basicwidget/cjkfont"
+	"golang.org/x/text/language"
 )
 
-func formItemPadding(context *guigui.Context) (int, int) {
-	return basicwidget.UnitSize(context) / 2, basicwidget.UnitSize(context) / 4
+var localeItems = []basicwidget.DropdownListItem[language.Tag]{
+	{
+		Text: "English",
+		ID:   language.English,
+	},
 }
 
-func defaultFormWidth(context *guigui.Context) int {
-	return 6 * basicwidget.UnitSize(context)
-}
-
-func minFormItemHeight(context *guigui.Context) int {
-	return basicwidget.UnitSize(context)
+func AppendRecommendedFaceSourceEntries(faceSourceEntries []basicwidget.FaceSourceEntry, locales []language.Tag) []basicwidget.FaceSourceEntry {
+	return cjkfont.AppendRecommendedFaceSourceEntries(faceSourceEntries, locales)
 }

@@ -1,3 +1,6 @@
+//go:build !cjk
+// +build !cjk
+
 /*
  * SPDX-License-Identifier: GPL-3.0-only
  * SPDX-FileCopyrightText: 2025 Project 86 Community
@@ -19,30 +22,20 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-package configs
+package app
 
-import "image"
-
-var AppWindowMinSize = image.Pt(600, 300)
-
-const (
-	InternetServer = "https://clients3.google.com/generate_204"
-
-	CompanyName = "Project-86-Community"
-	AppName     = "Project-86-Launcher"
-	AppTitle    = "Project 86 Launcher"
-
-	RepoOwner = "Taliayaya"
-	RepoName  = "Project-86"
-
-	LoadTypeData  = "data"
-	LoadTypeCache = "cache"
-
-	DataFile  = "data.json"
-	CacheFile = "cache.json"
-
-	Website = "https://project-86-community.github.io/Project-86-Website/"
-	Github  = "https://github.com/Taliayaya/Project-86"
-	Discord = "https://discord.gg/A8Fr6yEsUn"
-	Patreon = "https://www.patreon.com/project86"
+import (
+	"github.com/hajimehoshi/guigui/basicwidget"
+	"golang.org/x/text/language"
 )
+
+var localeItems = []basicwidget.DropdownListItem[language.Tag]{
+	{
+		Text: "English",
+		ID:   language.English,
+	},
+}
+
+func AppendRecommendedFaceSourceEntries(faceSourceEntries []basicwidget.FaceSourceEntry, locales []language.Tag) []basicwidget.FaceSourceEntry {
+	return faceSourceEntries
+}

@@ -1,3 +1,5 @@
+//go:build darwin || linux
+
 /*
  * SPDX-License-Identifier: GPL-3.0-only
  * SPDX-FileCopyrightText: 2025 Project 86 Community
@@ -19,30 +21,28 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-package configs
+package file
 
-import "image"
-
-var AppWindowMinSize = image.Pt(600, 300)
-
-const (
-	InternetServer = "https://clients3.google.com/generate_204"
-
-	CompanyName = "Project-86-Community"
-	AppName     = "Project-86-Launcher"
-	AppTitle    = "Project 86 Launcher"
-
-	RepoOwner = "Taliayaya"
-	RepoName  = "Project-86"
-
-	LoadTypeData  = "data"
-	LoadTypeCache = "cache"
-
-	DataFile  = "data.json"
-	CacheFile = "cache.json"
-
-	Website = "https://project-86-community.github.io/Project-86-Website/"
-	Github  = "https://github.com/Taliayaya/Project-86"
-	Discord = "https://discord.gg/A8Fr6yEsUn"
-	Patreon = "https://www.patreon.com/project86"
+import (
+	"fmt"
+	"os"
+	"p86l/configs"
+	"p86l/internal/debug"
+	"path/filepath"
 )
+
+func GetCompanyPath(appDebug *debug.Debug, extra ...string) (string, *debug.Error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", appDebug.New(err, debug.FSError, debug.ErrFSDirInvalid)
+	}
+	dataPath := filepath.Join(home, ".local", "share", configs.CompanyName)
+	// Used for testing only!
+	if len(extra) == 1 && extra[0] != "" {
+		dataPath = fmt.Sprintf("%s_%s", dataPath, extra[0])
+	}
+	if dErr := mkdirAll(appDebug, dataPath); dErr != nil {
+		return "", dErr
+	}
+	return dataPath, nil
+}

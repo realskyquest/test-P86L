@@ -19,29 +19,51 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-package assets
+package locale
 
 import (
-	"bytes"
-	_ "embed"
-	"image"
+	"embed"
+	"fmt"
+	"io/fs"
 	"p86l/internal/debug"
+	"strings"
 
-	ico "github.com/biessek/golang-ico"
+	"github.com/BurntSushi/toml"
+	i18n "github.com/nicksnyder/go-i18n/v2/i18n"
+	"golang.org/x/text/language"
 )
 
-//go:embed p86l.ico
-var p86lIcon []byte
+//go:embed locale.*.toml
+var localeFS embed.FS
 
-func GetIconImages(appDebug *debug.Debug) ([]image.Image, *debug.Error) {
-	var IconImages []image.Image
+func GetLocales(appDebug *debug.Debug, locale language.Tag) (*i18n.Bundle, *debug.Error) {
+	bundle := i18n.NewBundle(locale)
+	bundle.RegisterUnmarshalFunc("toml", toml.Unmarshal)
 
-	reader := bytes.NewReader(p86lIcon)
-	icons, err := ico.DecodeAll(reader)
+	entries, err := fs.ReadDir(localeFS, ".")
 	if err != nil {
 		return nil, appDebug.New(err, debug.FSError, debug.ErrFSFileNotExist)
 	}
-	IconImages = append(IconImages, icons...)
 
-	return IconImages, nil
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".toml") {
+			localeTag := extractLocaleTag(entry.Name())
+			if localeTag != "" {
+				_, err := bundle.LoadMessageFileFS(localeFS, entry.Name())
+				if err != nil {
+					return nil, appDebug.New(fmt.Errorf("%s: %v", entry.Name(), err), debug.FSError, debug.ErrFSFileNotExist)
+				}
+			}
+		}
+	}
+
+	return bundle, nil
+}
+
+func extractLocaleTag(filename string) string {
+	parts := strings.Split(filename, ".")
+	if len(parts) >= 2 && parts[0] == "locale" {
+		return parts[1]
+	}
+	return ""
 }

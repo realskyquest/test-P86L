@@ -1,3 +1,6 @@
+//go:build release
+// +build release
+
 /*
  * SPDX-License-Identifier: GPL-3.0-only
  * SPDX-FileCopyrightText: 2025 Project 86 Community
@@ -19,30 +22,33 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-package configs
+package isrelease
 
-import "image"
+import (
+	"os"
+	"p86l"
+	"p86l/internal/debug"
+	"p86l/internal/file"
+	"path/filepath"
 
-var AppWindowMinSize = image.Pt(600, 300)
-
-const (
-	InternetServer = "https://clients3.google.com/generate_204"
-
-	CompanyName = "Project-86-Community"
-	AppName     = "Project-86-Launcher"
-	AppTitle    = "Project 86 Launcher"
-
-	RepoOwner = "Taliayaya"
-	RepoName  = "Project-86"
-
-	LoadTypeData  = "data"
-	LoadTypeCache = "cache"
-
-	DataFile  = "data.json"
-	CacheFile = "cache.json"
-
-	Website = "https://project-86-community.github.io/Project-86-Website/"
-	Github  = "https://github.com/Taliayaya/Project-86"
-	Discord = "https://discord.gg/A8Fr6yEsUn"
-	Patreon = "https://www.patreon.com/project86"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
+
+func Run() {
+	e := &debug.Debug{}
+	a, dErr := file.NewFS(e)
+	if dErr != nil {
+		log.Error().Stack().Int("Code", dErr.Code).Str("Type", string(dErr.Type)).Err((dErr.Err)).Msg("Run")
+	}
+
+	logFile, err := a.Root.Create(filepath.Join(a.DirAppPath(), "log.txt"))
+	if err != nil {
+		log.Error().Stack().Int("Code", dErr.Code).Str("Type", string(dErr.Type)).Err((dErr.Err)).Msg("Run")
+	}
+
+	multi := zerolog.MultiLevelWriter(os.Stdout, logFile)
+	log.Logger = zerolog.New(multi).With().Timestamp().Logger()
+
+	p86l.TheDebugMode.Logs = true
+}

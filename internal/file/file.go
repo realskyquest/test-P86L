@@ -23,101 +23,167 @@ package file
 
 import (
 	"errors"
-	"fmt"
+	"io"
+	"io/fs"
 	"os"
 	"p86l/configs"
-	"p86l/internal/debug"
+	pd "p86l/internal/debug"
 	"path/filepath"
-	"runtime"
-	"strings"
 
-	"github.com/quasilyte/gdata/v2"
 	"github.com/rs/zerolog/log"
 	"github.com/skratchdot/open-golang/open"
 )
 
-type AppFS struct {
-	GdataM *gdata.Manager
-}
-
-func (afs *AppFS) clean() string {
-	colorModeFile := afs.GdataM.ObjectPropPath(configs.Data, configs.ColorModeFile)
-	if runtime.GOOS == "windows" {
-		return strings.TrimSuffix(colorModeFile, fmt.Sprintf("%s\\%s\\%s", configs.AppName, configs.Data, configs.ColorModeFile))
+// Used to make folders.
+func mkdirAll(appDebug *pd.Debug, path string) *pd.Error {
+	_, err := os.Stat(path)
+	if !errors.Is(err, fs.ErrNotExist) && err != nil {
+		return nil
 	}
-	return strings.TrimSuffix(colorModeFile, fmt.Sprintf("%s/%s/%s", configs.AppName, configs.Data, configs.ColorModeFile))
-}
-
-func (afs *AppFS) OpenFileManager(appDebug *debug.Debug, path string) *debug.Error {
-	log.Info().Str("Open File Manager", path).Send()
-	if err := open.Run(path); err != nil {
-		return appDebug.New(err, debug.FSError, debug.ErrOpenFolderFailed)
-	}
-	return appDebug.New(nil, debug.UnknownError, debug.ErrUnknown)
-}
-
-func (afs *AppFS) IsDir() bool {
-	if afs.GdataM.ObjectPropExists(configs.Data, configs.ColorModeFile) || afs.GdataM.ObjectPropExists(configs.Data, configs.AppScaleFile) {
-		return true
-	}
-	return false
-}
-
-func (afs *AppFS) CompanyDir(appDebug *debug.Debug) (string, *debug.Error) {
-	if afs.IsDir() {
-		return afs.clean(), appDebug.New(nil, debug.UnknownError, debug.ErrUnknown)
-	}
-
-	return "", appDebug.New(errors.New("CompanyDir not found"), debug.FSError, debug.ErrDirNotFound)
-}
-
-func (afs *AppFS) LauncherDir(appDebug *debug.Debug) (string, *debug.Error) {
-	if afs.IsDir() {
-		return afs.clean() + configs.AppName, appDebug.New(nil, debug.UnknownError, debug.ErrUnknown)
-	}
-
-	return "", appDebug.New(errors.New("LauncherDir not found"), debug.FSError, debug.ErrDirNotFound)
-}
-
-func (afs *AppFS) LogDir(appDebug *debug.Debug) (string, *debug.Error) {
-	if afs.IsDir() {
-		_, err := afs.LauncherDir(appDebug)
-		if err.Err != nil {
-			return "", err
-		}
-
-		if runtime.GOOS == "windows" {
-			return afs.clean() + configs.AppName + "\\logs", appDebug.New(nil, debug.UnknownError, debug.ErrUnknown)
-		}
-		return afs.clean() + configs.AppName + "/logs", appDebug.New(nil, debug.UnknownError, debug.ErrUnknown)
-	}
-
-	return "", appDebug.New(errors.New("LogDir not found"), debug.FSError, debug.ErrDirNotFound)
-}
-
-func (afs *AppFS) ClearFolder(folderPath string, appDebug *debug.Debug) *debug.Error {
-	// Read all items in the directory
-	items, err := os.ReadDir(folderPath)
+	err = os.MkdirAll(path, 0755)
 	if err != nil {
-		return appDebug.New(fmt.Errorf("failed to read directory: %w", err), debug.FSError, debug.ErrFolderClear)
+		return appDebug.New(err, pd.FSError, pd.ErrFSDirNew)
 	}
+	return nil
+}
 
-	// Iterate through each item and remove it
-	for _, item := range items {
-		itemPath := filepath.Join(folderPath, item.Name())
+type AppFS struct {
+	Root           *os.Root
+	CompanyDirPath string
+}
 
-		// If it's a directory, remove all contents recursively
-		if item.IsDir() {
-			if err := os.RemoveAll(itemPath); err != nil {
-				return appDebug.New(fmt.Errorf("failed to remove directory %s: %w", itemPath, err), debug.FSError, debug.ErrFolderClear)
-			}
-		} else {
-			// If it's a file, remove it directly
-			if err := os.Remove(itemPath); err != nil {
-				return appDebug.New(fmt.Errorf("failed to remove file %s: %w", itemPath, err), debug.FSError, debug.ErrFolderClear)
-			}
+// Make new FS for app.
+func NewFS(appDebug *pd.Debug, extra ...string) (*AppFS, *pd.Error) {
+	// Handles the company path and a path for debugging.
+	var companyPath string
+	if len(extra) == 1 && extra[0] != "" {
+		cPath, err := GetCompanyPath(appDebug, extra[0])
+		if err != nil {
+			return nil, err
 		}
+		companyPath = cPath
+	} else {
+		cPath, err := GetCompanyPath(appDebug)
+		if err != nil {
+			return nil, err
+		}
+		companyPath = cPath
 	}
 
-	return appDebug.New(nil, debug.UnknownError, debug.ErrUnknown)
+	// Makes the path for company and app.
+	err := mkdirAll(appDebug, filepath.Join(companyPath, configs.AppName))
+	if err != nil {
+		return nil, err
+	}
+
+	// Creates a virtual filesystem thats in company path, that protects/restricts changes outside of it.
+	root, rErr := os.OpenRoot(companyPath)
+	if rErr != nil {
+		return nil, appDebug.New(rErr, pd.FSError, pd.ErrFSRootInvalid)
+	}
+
+	return &AppFS{
+		Root:           root,
+		CompanyDirPath: companyPath,
+	}, nil
+}
+
+// Opens the filemanager app with the given path.
+func (a *AppFS) OpenFileManager(appDebug *pd.Debug, path string) *pd.Error {
+	if err := open.Run(path); err != nil {
+		return appDebug.New(err, pd.FSError, pd.ErrFSOpenFileManagerInvalid)
+	}
+	log.Info().Str("Path", path).Str("AppFS", "OpenFileManager").Msg("FileManager")
+	return nil
+}
+
+// Checks if the directory exists, uses OS
+func (a *AppFS) IsDir(appDebug *pd.Debug, filePath string) *pd.Error {
+	_, err := os.Stat(filePath)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return appDebug.New(err, pd.FSError, pd.ErrFSRootFileNotExist)
+		}
+		return appDebug.New(err, pd.FSError, pd.ErrFSRootFileInvalid)
+	}
+	return nil
+}
+
+// same as `IsDir` but its restricted via os.Root
+func (a *AppFS) IsDirR(appDebug *pd.Debug, statFile string) *pd.Error {
+	_, err := a.Root.Stat(statFile)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return appDebug.New(err, pd.FSError, pd.ErrFSRootFileNotExist)
+		}
+		return appDebug.New(err, pd.FSError, pd.ErrFSRootFileInvalid)
+	}
+	return nil
+}
+
+// Saves a file to disk.
+func (a *AppFS) Save(appDebug *pd.Debug, saveFile string, bytes []byte) *pd.Error {
+	file, err := a.Root.Create(saveFile)
+	if err != nil {
+		return appDebug.New(err, pd.FSError, pd.ErrFSRootFileNew)
+	}
+
+	_, err = file.Write(bytes)
+	if err != nil {
+		return appDebug.New(err, pd.FSError, pd.ErrFSRootFileWrite)
+	}
+
+	return nil
+}
+
+// Loads binary data from a file in disk.
+func (a *AppFS) Load(appDebug *pd.Debug, loadFile string) ([]byte, *pd.Error) {
+	dErr := a.IsDirR(appDebug, loadFile)
+	if dErr != nil {
+		return nil, dErr
+	}
+
+	file, err := a.Root.Open(loadFile)
+	if err != nil {
+		return nil, appDebug.New(err, pd.FSError, pd.ErrFSRootFileInvalid)
+	}
+
+	b, err := io.ReadAll(file)
+	if err != nil {
+		return nil, appDebug.New(err, pd.FSError, pd.ErrFSRootFileRead)
+	}
+
+	return b, nil
+}
+
+// /Project-86-Launcher/
+func (a *AppFS) DirAppPath() string {
+	return configs.AppName
+}
+
+// /build/
+func (a *AppFS) DirBuildPath() string {
+	return "build"
+}
+
+// /build/game
+func (a *AppFS) DirGamePath() string {
+	return filepath.Join(a.DirBuildPath(), "game")
+}
+
+// /build/prerelease
+func (a *AppFS) DirPreReleasePath() string {
+	return filepath.Join(a.DirBuildPath(), "prerelease")
+}
+
+// -- files --
+
+// /Project-86-Launcher/data.json
+func (a *AppFS) FileDataPath() string {
+	return filepath.Join(a.DirAppPath(), configs.DataFile)
+}
+
+// /Project-86-Launcher/cache.json
+func (a *AppFS) FileCachePath() string {
+	return filepath.Join(a.DirAppPath(), configs.CacheFile)
 }
