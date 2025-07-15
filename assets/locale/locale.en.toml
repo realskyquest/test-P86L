@@ -21,7 +21,7 @@ view = "View"
 
 [settings]
 title = "Settings"
-locale = "Locale"
+locale = "Language"
 colormode = "Change Launcher to dark-mode"
 appscale = "Change Launcher scale"
 prerelease = "Use Pre-release"
