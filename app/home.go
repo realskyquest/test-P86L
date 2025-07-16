@@ -34,6 +34,11 @@ import (
 	"github.com/hajimehoshi/guigui/layout"
 )
 
+func homeSize(context *guigui.Context, size int) bool {
+	scaledWidth := int(float64(context.AppSize().X) / context.AppScale())
+	return scaledWidth > size
+}
+
 type Home struct {
 	guigui.DefaultWidget
 
@@ -51,16 +56,30 @@ func (h *Home) Build(context *guigui.Context, appender *guigui.ChildWidgetAppend
 	h.stats.SetModel(h.model)
 	context.SetOpacity(&h.background, 0.9)
 
+	var gl layout.GridLayout
 	u := basicwidget.UnitSize(context)
-	gl := layout.GridLayout{
-		Bounds: context.Bounds(h),
-		Widths: []layout.Size{
-			layout.FlexibleSize(1),
-		},
-		Heights: []layout.Size{
-			layout.FlexibleSize(1),
-			layout.FixedSize(u*4 - (u / 4)),
-		},
+	if homeSize(context, 740) {
+		gl = layout.GridLayout{
+			Bounds: context.Bounds(h),
+			Widths: []layout.Size{
+				layout.FlexibleSize(1),
+			},
+			Heights: []layout.Size{
+				layout.FlexibleSize(1),
+				layout.FixedSize(u*4 - (u / 4)),
+			},
+		}
+	} else {
+		gl = layout.GridLayout{
+			Bounds: context.Bounds(h),
+			Widths: []layout.Size{
+				layout.FlexibleSize(1),
+			},
+			Heights: []layout.Size{
+				layout.FlexibleSize(1),
+				layout.FixedSize(u * 7),
+			},
+		}
 	}
 	appender.AppendChildWidgetWithBounds(&h.background, gl.CellBounds(0, 1))
 	appender.AppendChildWidgetWithBounds(&h.stats, gl.CellBounds(0, 1))
@@ -156,23 +175,51 @@ func (h *homeStats) Build(context *guigui.Context, appender *guigui.ChildWidgetA
 	})
 
 	u := basicwidget.UnitSize(context)
-	gl := layout.GridLayout{
-		Bounds: context.Bounds(h),
-		Widths: []layout.Size{
-			layout.FixedSize(u*3 - (u / 2)),
-			layout.FixedSize(max(h.welcomeText.DefaultSize(context).X, h.welcomeStatText.DefaultSize(context).X) + u),
-			layout.FixedSize(u * 8),
-			layout.FlexibleSize(1),
-		},
-		Heights: []layout.Size{
-			layout.FixedSize(u / 2),
-			layout.FlexibleSize(1),
-		},
-		ColumnGap: u / 2,
+	if homeSize(context, 740) {
+		gl := layout.GridLayout{
+			Bounds: context.Bounds(h),
+			Widths: []layout.Size{
+				layout.FixedSize(u*3 - (u / 2)),
+				layout.FixedSize(max(h.welcomeText.DefaultSize(context).X, h.welcomeStatText.DefaultSize(context).X) + u),
+				layout.FixedSize(u * 8),
+			},
+			Heights: []layout.Size{
+				layout.FixedSize(u / 2),
+				layout.FlexibleSize(1),
+			},
+			ColumnGap: u / 2,
+		}
+
+		appender.AppendChildWidgetWithBounds(&h.image, gl.CellBounds(0, 1))
+		appender.AppendChildWidgetWithBounds(&h.form1, gl.CellBounds(1, 1))
+		appender.AppendChildWidgetWithBounds(&h.form2, gl.CellBounds(2, 1))
+	} else {
+		gl := layout.GridLayout{
+			Bounds: context.Bounds(h),
+			Widths: []layout.Size{
+				layout.FixedSize(u / 2),
+				layout.FlexibleSize(1),
+				layout.FixedSize(u / 2),
+			},
+			Heights: []layout.Size{
+				layout.FixedSize(u / 2),
+				layout.FlexibleSize(1),
+				layout.FlexibleSize(1),
+			},
+			ColumnGap: u / 2,
+		}
+		glT := layout.GridLayout{
+			Bounds: gl.CellBounds(1, 1),
+			Widths: []layout.Size{
+				layout.FixedSize(u*3 - (u / 2)),
+				layout.FlexibleSize(1),
+			},
+		}
+
+		appender.AppendChildWidgetWithBounds(&h.image, glT.CellBounds(0, 0))
+		appender.AppendChildWidgetWithBounds(&h.form1, glT.CellBounds(1, 0))
+		appender.AppendChildWidgetWithBounds(&h.form2, gl.CellBounds(1, 2))
 	}
-	appender.AppendChildWidgetWithBounds(&h.image, gl.CellBounds(0, 1))
-	appender.AppendChildWidgetWithBounds(&h.form1, gl.CellBounds(1, 1))
-	appender.AppendChildWidgetWithBounds(&h.form2, gl.CellBounds(2, 1))
 
 	return nil
 }
