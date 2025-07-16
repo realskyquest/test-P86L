@@ -305,7 +305,7 @@ func (p *playLinks) Build(context *guigui.Context, appender *guigui.ChildWidgetA
 
 	u := basicwidget.UnitSize(context)
 	var gl layout.GridLayout
-	if context.AppSize().X >= 1280 {
+	if breakSize(context, 1024) {
 		gl = layout.GridLayout{
 			Bounds: context.Bounds(p),
 			Heights: []layout.Size{
@@ -327,7 +327,7 @@ func (p *playLinks) Build(context *guigui.Context, appender *guigui.ChildWidgetA
 		appender.AppendChildWidgetWithBounds(&p.githubButton, gl.CellBounds(1, 0))
 		appender.AppendChildWidgetWithBounds(&p.discordButton, gl.CellBounds(2, 0))
 		appender.AppendChildWidgetWithBounds(&p.patreonButton, gl.CellBounds(3, 0))
-	} else if context.AppSize().X >= 1024 {
+	} else if breakSize(context, 640) {
 		gl = layout.GridLayout{
 			Bounds: context.Bounds(p),
 			Heights: []layout.Size{
