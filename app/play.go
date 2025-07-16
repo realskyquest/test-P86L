@@ -148,6 +148,7 @@ func (p *playContent) SetModel(model *p86l.Model) {
 }
 
 func (p *playContent) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
+	data := p.model.Data()
 	cache := p.model.Cache()
 
 	p.installButton.SetOnDown(func() {
@@ -162,7 +163,13 @@ func (p *playContent) Build(context *guigui.Context, appender *guigui.ChildWidge
 
 				ebiten.MinimizeWindow()
 				go func() {
-					cmd := exec.Command(filepath.Join(p86l.FS.CompanyDirPath, "build", "game", "Project-86.exe"))
+					var game string
+					if data.File().UsePreRelease {
+						game = "pregame"
+					} else {
+						game = "game"
+					}
+					cmd := exec.Command(filepath.Join(p86l.FS.CompanyDirPath, "build", game, "Project-86.exe"))
 					rErr := cmd.Run()
 					if rErr != nil {
 						p86l.E.SetPopup(p86l.E.New(rErr, pd.AppError, pd.ErrGameNotExist))
@@ -176,7 +183,7 @@ func (p *playContent) Build(context *guigui.Context, appender *guigui.ChildWidge
 	})
 	p.updateButton.SetOnDown(func() {
 		if p.state == 1 && cache.IsValid() {
-			value, err := p86l.CheckNewerVersion(p.model.Data().File().GameVersion, cache.File().Repo.GetTagName())
+			value, err := p86l.CheckNewerVersion(data.File().GameVersion, cache.File().Repo.GetTagName())
 			if err != nil {
 				p86l.E.SetPopup(err)
 				return
@@ -190,7 +197,7 @@ func (p *playContent) Build(context *guigui.Context, appender *guigui.ChildWidge
 		}
 	})
 
-	if p.model.Data().File().UsePreRelease {
+	if data.File().UsePreRelease {
 		p.installButton.SetText(p86l.T("play.prerelease"))
 	} else {
 		p.installButton.SetText(p86l.T("play.install"))
@@ -198,7 +205,7 @@ func (p *playContent) Build(context *guigui.Context, appender *guigui.ChildWidge
 	p.playButton.SetText(p86l.T("play.play"))
 	p.updateButton.SetText(p86l.T("play.update"))
 
-	if p.model.Data().File().UsePreRelease {
+	if data.File().UsePreRelease {
 		if err := p86l.FS.IsDirR(p86l.E, filepath.Join(p86l.FS.DirBuildPath(), "pregame", "Project-86.exe")); err == nil {
 			// play.
 			p.state = 1
