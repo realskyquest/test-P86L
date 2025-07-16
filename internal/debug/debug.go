@@ -51,6 +51,7 @@ const (
 	ErrBrowserOpen
 	ErrGameVersionInvalid
 	ErrGameNotExist
+	ErrGameRunning
 )
 
 const (

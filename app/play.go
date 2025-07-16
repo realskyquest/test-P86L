@@ -23,7 +23,6 @@ package app
 
 import (
 	"cmp"
-	"errors"
 	"fmt"
 	"os/exec"
 	"p86l"
@@ -31,6 +30,7 @@ import (
 	"p86l/configs"
 	pd "p86l/internal/debug"
 	"path/filepath"
+	"sync"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/guigui"
@@ -79,6 +79,9 @@ type playContent struct {
 
 	state      int
 	inProgress bool
+
+	gameRunning bool
+	gameMutex   sync.Mutex
 
 	model *p86l.Model
 }
@@ -152,48 +155,76 @@ func (p *playContent) Build(context *guigui.Context, appender *guigui.ChildWidge
 	cache := p.model.Cache()
 
 	p.installButton.SetOnDown(func() {
-		if p.state == 0 && cache.IsValid() {
-			go p.handleDownload(context)
+		if p.state != 0 && !cache.IsValid() {
+			return
 		}
+		go p.handleDownload(context)
 	})
 	p.playButton.SetOnDown(func() {
-		if p.state == 1 {
-			if err := p86l.FS.IsDirR(p86l.E, p86l.FS.DirGamePath()); err == nil {
-				log.Info().Str("Game", "Starting game").Str("Play", "playContent").Msg(pd.FileManager)
-
-				ebiten.MinimizeWindow()
-				go func() {
-					var game string
-					if data.File().UsePreRelease {
-						game = "pregame"
-					} else {
-						game = "game"
-					}
-					cmd := exec.Command(filepath.Join(p86l.FS.CompanyDirPath, "build", game, "Project-86.exe"))
-					rErr := cmd.Run()
-					if rErr != nil {
-						p86l.E.SetPopup(p86l.E.New(rErr, pd.AppError, pd.ErrGameNotExist))
-					}
-				}()
-
-			} else {
-				p86l.E.SetPopup(p86l.E.New(errors.New("Game not found"), pd.AppError, pd.ErrGameNotExist))
-			}
+		if p.state != 1 {
+			return
 		}
-	})
-	p.updateButton.SetOnDown(func() {
-		if p.state == 1 && cache.IsValid() {
-			value, err := p86l.CheckNewerVersion(data.File().GameVersion, cache.File().Repo.GetTagName())
-			if err != nil {
-				p86l.E.SetPopup(err)
+
+		if err := p86l.FS.IsDirR(p86l.E, p86l.FS.DirGamePath()); err != nil {
+			p86l.E.SetPopup(p86l.E.New(fmt.Errorf("game not found"), pd.AppError, pd.ErrGameNotExist))
+			return
+		}
+
+		p.gameMutex.Lock()
+		if p.gameRunning {
+			p.gameMutex.Unlock()
+			p86l.E.SetPopup(p86l.E.New(fmt.Errorf("game is already running."), pd.AppError, pd.ErrGameRunning))
+			return
+		}
+		p.gameRunning = true
+		p.gameMutex.Unlock()
+
+		log.Info().Str("Game", "starting game").Str("Play", "playContent").Msg(pd.FileManager)
+		ebiten.MinimizeWindow()
+
+		go func() {
+			defer func() {
+				p.gameMutex.Lock()
+				p.gameRunning = false
+				p.gameMutex.Unlock()
+				log.Info().Str("Game", "game has closed").Str("Play", "playContent").Msg(pd.FileManager)
+			}()
+
+			var game string
+			if data.File().UsePreRelease {
+				game = "pregame"
+			} else {
+				game = "game"
+			}
+
+			cmd := exec.Command(filepath.Join(p86l.FS.CompanyDirPath, "build", game, "Project-86.exe"))
+			if err := cmd.Start(); err != nil {
+				p86l.E.SetPopup(p86l.E.New(err, pd.AppError, pd.ErrGameNotExist))
 				return
 			}
-			if value {
-				log.Info().Str("Game", "New version found").Str("Play", "playContent").Msg(pd.NetworkManager)
-				go p.handleDownload(context)
-			} else {
-				p86l.E.SetPopup(p86l.E.New(fmt.Errorf("newer version not found"), pd.AppError, pd.ErrGameVersionInvalid))
+
+			if err := cmd.Wait(); err != nil {
+				if _, ok := err.(*exec.ExitError); !ok {
+					p86l.E.SetPopup(p86l.E.New(err, pd.AppError, pd.ErrGameNotExist))
+				}
 			}
+		}()
+	})
+	p.updateButton.SetOnDown(func() {
+		if p.state != 1 && !cache.IsValid() {
+			return
+		}
+
+		value, err := p86l.CheckNewerVersion(data.File().GameVersion, cache.File().Repo.GetTagName())
+		if err != nil {
+			p86l.E.SetPopup(err)
+			return
+		}
+		if value {
+			log.Info().Str("Game", "New version found").Str("Play", "playContent").Msg(pd.NetworkManager)
+			go p.handleDownload(context)
+		} else {
+			p86l.E.SetPopup(p86l.E.New(fmt.Errorf("newer version not found"), pd.AppError, pd.ErrGameVersionInvalid))
 		}
 	})
 
