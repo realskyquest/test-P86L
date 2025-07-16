@@ -34,11 +34,6 @@ import (
 	"github.com/hajimehoshi/guigui/layout"
 )
 
-func homeSize(context *guigui.Context, size int) bool {
-	scaledWidth := int(float64(context.AppSize().X) / context.AppScale())
-	return scaledWidth > size
-}
-
 type Home struct {
 	guigui.DefaultWidget
 
@@ -58,7 +53,7 @@ func (h *Home) Build(context *guigui.Context, appender *guigui.ChildWidgetAppend
 
 	var gl layout.GridLayout
 	u := basicwidget.UnitSize(context)
-	if homeSize(context, 740) {
+	if breakSize(context, 620) {
 		gl = layout.GridLayout{
 			Bounds: context.Bounds(h),
 			Widths: []layout.Size{
@@ -175,7 +170,7 @@ func (h *homeStats) Build(context *guigui.Context, appender *guigui.ChildWidgetA
 	})
 
 	u := basicwidget.UnitSize(context)
-	if homeSize(context, 740) {
+	if breakSize(context, 620) {
 		gl := layout.GridLayout{
 			Bounds: context.Bounds(h),
 			Widths: []layout.Size{

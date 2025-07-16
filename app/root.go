@@ -46,6 +46,11 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+func breakSize(context *guigui.Context, size int) bool {
+	scaledWidth := int(float64(context.AppSize().X) / context.AppScale())
+	return scaledWidth > size
+}
+
 type Root struct {
 	guigui.DefaultWidget
 

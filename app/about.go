@@ -34,14 +34,54 @@ import (
 type About struct {
 	guigui.DefaultWidget
 
-	leadImg      basicwidget.Image
-	devImg       basicwidget.Image
-	leadText     basicwidget.Text
-	devText      basicwidget.Text
-	aboutContent aboutContent
+	aboutText   basicwidget.Text
+	credits     aboutCredits
+	licenseText basicwidget.Text
 }
 
 func (a *About) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
+	a.aboutText.SetValue(p86l.T("about.info"))
+	a.aboutText.SetAutoWrap(true)
+	a.aboutText.SetHorizontalAlign(basicwidget.HorizontalAlignCenter)
+	a.aboutText.SetVerticalAlign(basicwidget.VerticalAlignMiddle)
+
+	a.licenseText.SetValue(p86l.ALicense)
+	a.licenseText.SetAutoWrap(true)
+	a.licenseText.SetScale(0.7)
+	a.licenseText.SetHorizontalAlign(basicwidget.HorizontalAlignCenter)
+	a.licenseText.SetVerticalAlign(basicwidget.VerticalAlignBottom)
+	context.SetOpacity(&a.licenseText, 0.7)
+
+	u := basicwidget.UnitSize(context)
+	gl := layout.GridLayout{
+		Bounds: context.Bounds(a).Inset(u / 2),
+		Widths: []layout.Size{
+			layout.FlexibleSize(1),
+		},
+		Heights: []layout.Size{
+			layout.FixedSize(u * 6),
+			layout.FixedSize(u * 5),
+			layout.FlexibleSize(1),
+		},
+		RowGap: u / 2,
+	}
+	appender.AppendChildWidgetWithBounds(&a.aboutText, gl.CellBounds(0, 0))
+	appender.AppendChildWidgetWithBounds(&a.credits, gl.CellBounds(0, 1))
+	appender.AppendChildWidgetWithBounds(&a.licenseText, gl.CellBounds(0, 2))
+
+	return nil
+}
+
+type aboutCredits struct {
+	guigui.DefaultWidget
+
+	leadImg  basicwidget.Image
+	devImg   basicwidget.Image
+	leadText basicwidget.Text
+	devText  basicwidget.Text
+}
+
+func (a *aboutCredits) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
 	img1, err1 := assets.TheImageCache.Get(p86l.E, "lead")
 	img2, err2 := assets.TheImageCache.Get(p86l.E, "dev")
 
@@ -53,78 +93,58 @@ func (a *About) Build(context *guigui.Context, appender *guigui.ChildWidgetAppen
 	a.leadImg.SetImage(img1)
 	a.devImg.SetImage(img2)
 
-	a.leadText.SetVerticalAlign(basicwidget.VerticalAlignMiddle)
-	a.leadText.SetScale(1.2)
 	a.leadText.SetValue(p86l.T("about.lead"))
+	a.leadText.SetScale(1.2)
+	a.leadText.SetHorizontalAlign(basicwidget.HorizontalAlignCenter)
 
-	a.devText.SetScale(1.2)
-	a.devText.SetVerticalAlign(basicwidget.VerticalAlignMiddle)
 	a.devText.SetValue(p86l.T("about.dev"))
+	a.devText.SetScale(1.2)
+	a.devText.SetHorizontalAlign(basicwidget.HorizontalAlignCenter)
 
 	u := basicwidget.UnitSize(context)
-	gl := layout.GridLayout{
-		Bounds: context.Bounds(a).Inset(u / 2),
-		Heights: []layout.Size{
-			layout.FlexibleSize(1),
-			layout.FlexibleSize(1),
-		},
-		RowGap: u / 2,
-	}
-	{
-		glP := layout.GridLayout{
-			Bounds: gl.CellBounds(0, 0),
+	if breakSize(context, 760) {
+		gl := layout.GridLayout{
+			Bounds: context.Bounds(a),
 			Widths: []layout.Size{
-				layout.FlexibleSize(2),
+				layout.FlexibleSize(1),
+				layout.FixedSize(max(a.leadText.DefaultSize(context).X, a.devText.DefaultSize(context).X)),
+				layout.FixedSize(u * 2),
+				layout.FixedSize(max(a.leadText.DefaultSize(context).X, a.devText.DefaultSize(context).X)),
+				layout.FixedSize(u * 2),
 				layout.FlexibleSize(1),
 			},
 			Heights: []layout.Size{
+				layout.FixedSize(u * 2),
+			},
+			ColumnGap: u,
+		}
+
+		appender.AppendChildWidgetWithBounds(&a.leadText, gl.CellBounds(1, 0))
+		appender.AppendChildWidgetWithBounds(&a.leadImg, gl.CellBounds(2, 0))
+		appender.AppendChildWidgetWithBounds(&a.devText, gl.CellBounds(3, 0))
+		appender.AppendChildWidgetWithBounds(&a.devImg, gl.CellBounds(4, 0))
+	} else {
+		gl := layout.GridLayout{
+			Bounds: context.Bounds(a),
+			Widths: []layout.Size{
 				layout.FlexibleSize(1),
+				layout.FixedSize(max(a.leadText.DefaultSize(context).X, a.devText.DefaultSize(context).X)),
+				layout.FixedSize(u * 2),
 				layout.FlexibleSize(1),
 			},
+			Heights: []layout.Size{
+				layout.FixedSize(u * 2),
+				layout.FixedSize(u * 2),
+			},
+			ColumnGap: u,
 			RowGap:    u / 2,
-			ColumnGap: u / 2,
 		}
-		appender.AppendChildWidgetWithBounds(&a.leadText, glP.CellBounds(0, 0))
-		appender.AppendChildWidgetWithBounds(&a.leadImg, glP.CellBounds(1, 0))
-		appender.AppendChildWidgetWithBounds(&a.devText, glP.CellBounds(0, 1))
-		appender.AppendChildWidgetWithBounds(&a.devImg, glP.CellBounds(1, 1))
+
+		appender.AppendChildWidgetWithBounds(&a.leadText, gl.CellBounds(1, 0))
+		appender.AppendChildWidgetWithBounds(&a.leadImg, gl.CellBounds(2, 0))
+		appender.AppendChildWidgetWithBounds(&a.devText, gl.CellBounds(1, 1))
+		appender.AppendChildWidgetWithBounds(&a.devImg, gl.CellBounds(2, 1))
 	}
-	appender.AppendChildWidgetWithBounds(&a.aboutContent, gl.CellBounds(0, 1))
-
-	return nil
-}
-
-type aboutContent struct {
-	guigui.DefaultWidget
-
-	infoText    basicwidget.Text
-	licenseText basicwidget.Text
-}
-
-func (a *aboutContent) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
-	a.infoText.SetAutoWrap(true)
-	a.infoText.SetHorizontalAlign(basicwidget.HorizontalAlignCenter)
-	a.infoText.SetVerticalAlign(basicwidget.VerticalAlignMiddle)
-	a.infoText.SetValue(p86l.T("about.info"))
-
-	a.licenseText.SetAutoWrap(true)
-	a.licenseText.SetHorizontalAlign(basicwidget.HorizontalAlignCenter)
-	a.licenseText.SetVerticalAlign(basicwidget.VerticalAlignBottom)
-	a.licenseText.SetScale(0.6)
-	context.SetOpacity(&a.licenseText, 0.5)
-	a.licenseText.SetValue(p86l.ALicense)
-
-	u := basicwidget.UnitSize(context)
-	gl := layout.GridLayout{
-		Bounds: context.Bounds(a),
-		Heights: []layout.Size{
-			layout.FlexibleSize(2),
-			layout.FlexibleSize(1),
-			layout.FixedSize(u),
-		},
-	}
-	appender.AppendChildWidgetWithBounds(&a.infoText, gl.CellBounds(0, 0))
-	appender.AppendChildWidgetWithBounds(&a.licenseText, gl.CellBounds(0, 1))
 
 	return nil
 }

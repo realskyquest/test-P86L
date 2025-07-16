@@ -30,11 +30,6 @@ import (
 	i18n "github.com/nicksnyder/go-i18n/v2/i18n"
 )
 
-type debugMode struct {
-	Version string
-	Logs    bool
-}
-
 var ALicense = `Project-86-Launcher: A Launcher developed for Project-86 for managing game files.
 Copyright (C) 2025 Project 86 Community
 
@@ -51,6 +46,11 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.`
 
+type debugMode struct {
+	Version string
+	Logs    bool
+}
+
 var (
 	TheDebugMode debugMode
 	GithubClient = github.NewClient(nil)
@@ -60,8 +60,7 @@ var (
 	t          = translator.New()
 
 	E  = &pd.Debug{} // Debugger
-	FS *file.AppFS      // Filesystem
+	FS *file.AppFS   // Filesystem
 
 	GErr *pd.Error
 )
-
