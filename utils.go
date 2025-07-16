@@ -32,6 +32,7 @@ import (
 	pd "p86l/internal/debug"
 	"p86l/internal/file"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -119,6 +120,21 @@ func OpenBrowser(url string) {
 	if err := browser.OpenURL(url); err != nil {
 		E.SetPopup(E.New(err, pd.AppError, pd.ErrBrowserOpen))
 	}
+}
+
+func GetUsername() string {
+	var username string
+	switch runtime.GOOS {
+	case "windows":
+		username = os.Getenv("USERNAME")
+	default:
+		username = os.Getenv("USER")
+	}
+
+	if username == "" {
+		username = os.Getenv("LOGNAME")
+	}
+	return strings.TrimSpace(username)
 }
 
 func IsValidPreGameFile(filename string) bool {

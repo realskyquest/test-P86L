@@ -3,6 +3,9 @@ open = "Open"
 
 [home]
 title = "Home"
+welcome = "Welcome back,"
+downloads = "Downloads:"
+version = "Latest version:"
 
 [play]
 title = "Play"

@@ -51,6 +51,7 @@ type Root struct {
 
 	background rootBackground
 	sidebar    Sidebar
+	home       Home
 	play       Play
 	changelog  Changelog
 	settings   Settings
@@ -127,6 +128,7 @@ func (r *Root) Build(context *guigui.Context, appender *guigui.ChildWidgetAppend
 
 	r.background.SetModel(&r.model)
 	r.sidebar.SetModel(&r.model)
+	r.home.SetModel(&r.model)
 	r.play.SetModel(&r.model)
 	r.changelog.SetModel(&r.model)
 	r.settings.SetModel(&r.model)
@@ -146,6 +148,8 @@ func (r *Root) Build(context *guigui.Context, appender *guigui.ChildWidgetAppend
 	appender.AppendChildWidgetWithBounds(&r.sidebar, gl.CellBounds(0, 0))
 
 	switch r.model.Mode() {
+	case "home":
+		appender.AppendChildWidgetWithBounds(&r.home, gl.CellBounds(1, 0))
 	case "play":
 		appender.AppendChildWidgetWithBounds(&r.play, gl.CellBounds(1, 0))
 	case "changelog":
