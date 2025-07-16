@@ -66,9 +66,8 @@ type Root struct {
 	popupContent  rootPopupContent
 	popupDebounce bool
 
-	inProgress bool
-	lastTick   int64
-	model      p86l.Model
+	lastTick int64
+	model    p86l.Model
 
 	locales           []language.Tag
 	faceSourceEntries []basicwidget.FaceSourceEntry
@@ -199,11 +198,12 @@ func (r *Root) Build(context *guigui.Context, appender *guigui.ChildWidgetAppend
 }
 
 func (r *Root) Tick(context *guigui.Context) error {
-	if ebiten.Tick()-r.lastTick >= int64(ebiten.TPS()*5) && !r.inProgress {
+	cache := r.model.Cache()
+	if ebiten.Tick()-r.lastTick >= int64(ebiten.TPS()*5) && !cache.Progress() {
 		r.lastTick = ebiten.Tick()
-		r.inProgress = true
+		cache.SetProgress(true)
 
-		if cache := r.model.Cache(); !cache.IsValid() || time.Now().After(cache.File().Timestamp.Add(cache.File().ExpiresIn)) {
+		if !cache.IsValid() || time.Now().After(cache.File().Timestamp.Add(cache.File().ExpiresIn)) {
 			log.Info().Str("Cache", "cache is invalid").Str("Root", "Tick").Msg(pd.NetworkManager)
 			go func() {
 				ctx := gctx.Background()
@@ -211,14 +211,14 @@ func (r *Root) Tick(context *guigui.Context) error {
 				if rErr != nil {
 					log.Error().Any("Release", rErr).Msg(pd.NetworkManager)
 					p86l.E.SetToast(p86l.E.New(rErr, pd.NetworkError, pd.ErrNetworkCacheRequest))
-					r.inProgress = false
+					cache.SetProgress(false)
 					return
 				}
 				err := cache.SetRepo(release, r.model.Data().File().Locale)
 				if err != nil {
 					p86l.E.SetToast(err)
 				}
-				r.inProgress = false
+				cache.SetProgress(false)
 			}()
 		}
 	}

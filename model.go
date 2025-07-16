@@ -184,9 +184,14 @@ func (d *DataModel) Save() *pd.Error {
 // -- CacheModel --
 
 type CacheModel struct {
+	progress       bool
 	valid          bool
 	file           file.Cache
 	TranslatedBody string
+}
+
+func (c *CacheModel) Progress() bool {
+	return c.progress
 }
 
 func (c *CacheModel) File() *file.Cache {
@@ -195,6 +200,10 @@ func (c *CacheModel) File() *file.Cache {
 
 func (c *CacheModel) IsValid() bool {
 	return c.valid
+}
+
+func (c *CacheModel) SetProgress(value bool) {
+	c.progress = value
 }
 
 func (c *CacheModel) SetValid(value bool) {

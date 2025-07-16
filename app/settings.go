@@ -294,6 +294,7 @@ func (s *settingsReset) Build(context *guigui.Context, appender *guigui.ChildWid
 	})
 	s.cacheButton.SetOnDown(func() {
 		cache.SetValid(false)
+		cache.SetProgress(false)
 	})
 
 	s.form.SetItems([]basicwidget.FormItem{
