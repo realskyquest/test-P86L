@@ -1,3 +1,5 @@
+//go:generate goversioninfo -icon=../../assets/p86l.ico -manifest=app.manifest
+
 /*
  * SPDX-License-Identifier: GPL-3.0-only
  * SPDX-FileCopyrightText: 2025 Project 86 Community

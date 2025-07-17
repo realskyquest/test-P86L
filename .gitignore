@@ -24,3 +24,7 @@ go.work
 /.vscode
 
 /bin
+/cmd/p86l/versioninfo.json
+/cmd/p86l/app.manifest
+/cmd/p86l/resource.syso
+

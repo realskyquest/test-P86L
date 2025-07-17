@@ -3,8 +3,16 @@ version: "3"
 vars:
   VERSION:
     sh: git describe --tags --exact-match 2>/dev/null || git rev-parse --short HEAD
+  COMMIT_COUNT:
+    sh: git rev-list --count HEAD
 
 tasks:
+  generate-version-info:
+    desc: Generate versioninfo.json with proper version data
+    cmds:
+      - go run ./scripts/version.go {{default "v0.0.0" .VERSION}} {{.COMMIT_COUNT}}
+      - go generate ./cmd/p86l
+      
   run:
     cmds:
       - go run ./cmd/p86l
