@@ -90,11 +90,21 @@ func (p *Play) Build(context *guigui.Context, appender *guigui.ChildWidgetAppend
 	})
 
 	u := basicwidget.UnitSize(context)
+
+	var linksSize int
+	if breakSize(context, 1024) {
+		linksSize = u * 2
+	} else if breakSize(context, 640) {
+		linksSize = u*5 - (u / 2)
+	} else {
+		linksSize = u * 6
+	}
+
 	gl := layout.GridLayout{
 		Bounds: context.Bounds(p).Inset(u / 2),
 		Heights: []layout.Size{
 			layout.FlexibleSize(1),
-			layout.FixedSize(p.links.DefaultSize(context).Y),
+			layout.FixedSize(linksSize),
 			layout.FixedSize(u * 2),
 		},
 		RowGap: u / 2,
@@ -120,6 +130,10 @@ type playContent struct {
 	gameMutex   sync.Mutex
 
 	model *p86l.Model
+}
+
+func (p *playContent) SetModel(model *p86l.Model) {
+	p.model = model
 }
 
 func (p *playContent) handleDownload(context *guigui.Context) {
@@ -182,8 +196,78 @@ func (p *playContent) handleDownload(context *guigui.Context) {
 	p.inProgress = false
 }
 
-func (p *playContent) SetModel(model *p86l.Model) {
-	p.model = model
+func (p *playContent) handlePlay() {
+	data := p.model.Data()
+
+	if p.state != 1 {
+		return
+	}
+
+	if err := p86l.FS.IsDirR(p86l.E, p86l.FS.DirGamePath()); err != nil {
+		p86l.E.SetPopup(p86l.E.New(fmt.Errorf("game not found"), pd.AppError, pd.ErrGameNotExist))
+		return
+	}
+
+	p.gameMutex.Lock()
+	if p.gameRunning {
+		p.gameMutex.Unlock()
+		p86l.E.SetPopup(p86l.E.New(fmt.Errorf("game is already running."), pd.AppError, pd.ErrGameRunning))
+		return
+	}
+	p.gameRunning = true
+	p.gameMutex.Unlock()
+
+	go func() {
+		defer func() {
+			p.gameMutex.Lock()
+			p.gameRunning = false
+			p.gameMutex.Unlock()
+			log.Info().Str("Game", "game has closed").Str("Play", "playContent").Msg(pd.FileManager)
+		}()
+
+		var game string
+		if data.File().UsePreRelease {
+			game = "pregame"
+		} else {
+			game = "game"
+		}
+
+		cmd := exec.Command(filepath.Join(p86l.FS.CompanyDirPath, "build", game, "Project-86.exe"))
+		if err := cmd.Start(); err != nil {
+			p86l.E.SetPopup(p86l.E.New(err, pd.AppError, pd.ErrGameNotExist))
+			return
+		}
+
+		log.Info().Str("Game", "starting game").Str("Play", "playContent").Msg(pd.FileManager)
+		ebiten.MinimizeWindow()
+
+		if err := cmd.Wait(); err != nil {
+			if _, ok := err.(*exec.ExitError); !ok {
+				p86l.E.SetPopup(p86l.E.New(err, pd.AppError, pd.ErrGameNotExist))
+			}
+		}
+	}()
+}
+
+func (p *playContent) handleUpdate(context *guigui.Context) {
+	data := p.model.Data()
+	cache := p.model.Cache()
+
+	if p.state != 1 && !cache.IsValid() {
+		return
+	}
+
+	value, err := p86l.CheckNewerVersion(data.File().GameVersion, cache.File().Repo.GetTagName())
+	if err != nil {
+		p86l.E.SetPopup(err)
+		return
+	}
+	if value {
+		log.Info().Str("Game", "New version found").Str("Play", "playContent").Msg(pd.NetworkManager)
+		go p.handleDownload(context)
+	} else {
+		p86l.E.SetPopup(p86l.E.New(fmt.Errorf("newer version not found"), pd.AppError, pd.ErrGameVersionInvalid))
+	}
 }
 
 func (p *playContent) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
@@ -196,72 +280,9 @@ func (p *playContent) Build(context *guigui.Context, appender *guigui.ChildWidge
 		}
 		go p.handleDownload(context)
 	})
-	p.playButton.SetOnDown(func() {
-		if p.state != 1 {
-			return
-		}
-
-		if err := p86l.FS.IsDirR(p86l.E, p86l.FS.DirGamePath()); err != nil {
-			p86l.E.SetPopup(p86l.E.New(fmt.Errorf("game not found"), pd.AppError, pd.ErrGameNotExist))
-			return
-		}
-
-		p.gameMutex.Lock()
-		if p.gameRunning {
-			p.gameMutex.Unlock()
-			p86l.E.SetPopup(p86l.E.New(fmt.Errorf("game is already running."), pd.AppError, pd.ErrGameRunning))
-			return
-		}
-		p.gameRunning = true
-		p.gameMutex.Unlock()
-
-		log.Info().Str("Game", "starting game").Str("Play", "playContent").Msg(pd.FileManager)
-		ebiten.MinimizeWindow()
-
-		go func() {
-			defer func() {
-				p.gameMutex.Lock()
-				p.gameRunning = false
-				p.gameMutex.Unlock()
-				log.Info().Str("Game", "game has closed").Str("Play", "playContent").Msg(pd.FileManager)
-			}()
-
-			var game string
-			if data.File().UsePreRelease {
-				game = "pregame"
-			} else {
-				game = "game"
-			}
-
-			cmd := exec.Command(filepath.Join(p86l.FS.CompanyDirPath, "build", game, "Project-86.exe"))
-			if err := cmd.Start(); err != nil {
-				p86l.E.SetPopup(p86l.E.New(err, pd.AppError, pd.ErrGameNotExist))
-				return
-			}
-
-			if err := cmd.Wait(); err != nil {
-				if _, ok := err.(*exec.ExitError); !ok {
-					p86l.E.SetPopup(p86l.E.New(err, pd.AppError, pd.ErrGameNotExist))
-				}
-			}
-		}()
-	})
+	p.playButton.SetOnDown(p.handlePlay)
 	p.updateButton.SetOnDown(func() {
-		if p.state != 1 && !cache.IsValid() {
-			return
-		}
-
-		value, err := p86l.CheckNewerVersion(data.File().GameVersion, cache.File().Repo.GetTagName())
-		if err != nil {
-			p86l.E.SetPopup(err)
-			return
-		}
-		if value {
-			log.Info().Str("Game", "New version found").Str("Play", "playContent").Msg(pd.NetworkManager)
-			go p.handleDownload(context)
-		} else {
-			p86l.E.SetPopup(p86l.E.New(fmt.Errorf("newer version not found"), pd.AppError, pd.ErrGameVersionInvalid))
-		}
+		p.handleUpdate(context)
 	})
 
 	if data.File().UsePreRelease {
@@ -290,14 +311,28 @@ func (p *playContent) Build(context *guigui.Context, appender *guigui.ChildWidge
 		}
 	}
 
-	// if downloading not in progress, do cache stuff.
+	// if downloading not in progress
 	if !p.inProgress {
+		// cache not valid.
 		if cache.IsValid() {
 			context.SetEnabled(&p.installButton, true)
 			context.SetEnabled(&p.updateButton, true)
 		} else {
 			context.SetEnabled(&p.installButton, false)
 			context.SetEnabled(&p.updateButton, false)
+		}
+
+		// enable update.
+		if cache.IsValid() {
+			value, err := p86l.CheckNewerVersion(data.File().GameVersion, cache.File().Repo.GetTagName())
+			if err != nil {
+				p86l.E.SetToast(err)
+			}
+			if value {
+				context.SetEnabled(&p.updateButton, true)
+			} else {
+				context.SetEnabled(&p.updateButton, false)
+			}
 		}
 	}
 
@@ -313,7 +348,6 @@ func (p *playContent) Build(context *guigui.Context, appender *guigui.ChildWidge
 			layout.FlexibleSize(1),
 			layout.FixedSize(2 * u),
 			layout.FlexibleSize(1),
-			layout.FixedSize(u * 2),
 		},
 	}
 	switch p.state {
