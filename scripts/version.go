@@ -131,7 +131,9 @@ func generateFile(tmplContent string, outputPath string, data Version) error {
 	}
 	defer func() {
 		err := outputFile.Close()
-		fmt.Println(fmt.Errorf("error closing %s: %w", outputPath, err))
+		if err != nil {
+			fmt.Println(fmt.Errorf("error closing %s: %w", outputPath, err))
+		}
 	}()
 
 	if err := tmpl.Execute(outputFile, data); err != nil {

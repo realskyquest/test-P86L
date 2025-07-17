@@ -7,28 +7,34 @@ vars:
     sh: git rev-list --count HEAD
 
 tasks:
+  clean:
+    cmds:
+      - rm cmd/p86l/versioninfo.json
+      - rm cmd/p86l/app.manifest
+      - rm cmd/p86l/resource.syso
+
   generate-version-info:
     desc: Generate versioninfo.json with proper version data
     cmds:
-      - go run ./scripts/version.go {{default "v0.0.0" .VERSION}} {{.COMMIT_COUNT}}
-      - go generate ./cmd/p86l
+      - go run scripts/version.go {{default "v0.0.0" .VERSION}} {{.COMMIT_COUNT}}
+      - go generate cmd/p86l/main.go
       
   run:
     cmds:
-      - go run ./cmd/p86l
+      - go run cmd/p86l/main.go
 
   run:debug:
     cmds:
-      - P86L_DEBUG=logs go run ./cmd/p86l
+      - P86L_DEBUG=logs go run cmd/p86l/main.go
 
   build:debug:
     cmds:
-      - go build -tags release -ldflags "-s -w" -trimpath -o ./bin/ ./cmd/p86l
+      - go build -tags release -ldflags "-s -w" -trimpath -o bin/ cmd/p86l/main.go
 
   build:windows:
     cmds:
-      - GOOS=windows GOARCH=amd64 go build -tags 'release' -ldflags "-s -w -X main.version={{.VERSION}} -X=runtime.godebugDefault=asyncpreemptoff=1 -H=windowsgui" -trimpath -o ./bin/Project-86-Launcher-{{.VERSION}}.exe ./cmd/p86l
+      - GOOS=windows GOARCH=amd64 go build -tags 'release' -ldflags "-s -w -X main.version={{.VERSION}} -X=runtime.godebugDefault=asyncpreemptoff=1 -H=windowsgui" -trimpath -o bin/Project-86-Launcher-{{.VERSION}}.exe cmd/p86l/main.go
 
   build:windows-cjk:
     cmds:
-      - GOOS=windows GOARCH=amd64 go build -tags 'release,cjk' -ldflags "-s -w -X main.version={{.VERSION}} -X=runtime.godebugDefault=asyncpreemptoff=1 -H=windowsgui" -trimpath -o ./bin/Project-86-Launcher-cjk-{{.VERSION}}.exe ./cmd/p86l
+      - GOOS=windows GOARCH=amd64 go build -tags 'release,cjk' -ldflags "-s -w -X main.version={{.VERSION}} -X=runtime.godebugDefault=asyncpreemptoff=1 -H=windowsgui" -trimpath -o bin/Project-86-Launcher-cjk-{{.VERSION}}.exe cmd/p86l/main.go
