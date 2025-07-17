@@ -245,16 +245,16 @@ func (s *sidebarStats) Build(context *guigui.Context, appender *guigui.ChildWidg
 	u := basicwidget.UnitSize(context)
 	gl := layout.GridLayout{
 		Bounds: context.Bounds(s),
+		Widths: []layout.Size{
+			layout.FixedSize(u / 4),
+			layout.FlexibleSize(1),
+			layout.FixedSize(u / 2),
+		},
 		Heights: []layout.Size{
 			layout.FlexibleSize(1),
 			layout.FlexibleSize(1),
 			layout.FixedSize(s.versionText.DefaultSize(context).Y),
 			layout.FixedSize(u * 2),
-		},
-		Widths: []layout.Size{
-			layout.FixedSize(u / 4),
-			layout.FlexibleSize(1),
-			layout.FixedSize(u / 2),
 		},
 		RowGap: u / 2,
 	}

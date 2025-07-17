@@ -151,7 +151,7 @@ func (r *Root) Build(context *guigui.Context, appender *guigui.ChildWidgetAppend
 	}
 	data.File().WindowMaximize = maximized
 	if ebiten.IsWindowBeingClosed() {
-		data.Save()
+		r.err = data.Save()
 	}
 
 	r.background.SetModel(&r.model)

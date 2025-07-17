@@ -83,8 +83,6 @@ type settingsData struct {
 	colorModeToggle       basicwidget.Toggle
 	scaleText             basicwidget.Text
 	scaleSegmentedControl basicwidget.SegmentedControl[int]
-	preReleaseText        basicwidget.Text
-	preReleaseToggle      basicwidget.Toggle
 
 	model *p86l.Model
 
@@ -102,7 +100,6 @@ func (s *settingsData) Build(context *guigui.Context, appender *guigui.ChildWidg
 	s.localeText.SetValue(p86l.T("settings.locale"))
 	s.colorModeText.SetValue(p86l.T("settings.colormode"))
 	s.scaleText.SetValue(p86l.T("settings.appscale"))
-	s.preReleaseText.SetValue(p86l.T("settings.prerelease"))
 
 	s.localeDropdownList.SetItems(localeItems)
 	s.localeDropdownList.SetOnItemSelected(func(index int) {
@@ -179,20 +176,6 @@ func (s *settingsData) Build(context *guigui.Context, appender *guigui.ChildWidg
 	})
 	s.scaleSegmentedControl.SelectItemByID(data.File().AppScale)
 
-	s.preReleaseToggle.SetOnValueChanged(func(value bool) {
-		if value {
-			data.SetUsePreRelease(true)
-		} else {
-			data.SetUsePreRelease(false)
-		}
-		s.err = data.Save()
-	})
-	if data.File().UsePreRelease {
-		s.preReleaseToggle.SetValue(true)
-	} else {
-		s.preReleaseToggle.SetValue(false)
-	}
-
 	if s.err != nil {
 		p86l.GErr = s.err
 		return s.err.Err
@@ -210,10 +193,6 @@ func (s *settingsData) Build(context *guigui.Context, appender *guigui.ChildWidg
 		{
 			PrimaryWidget:   &s.scaleText,
 			SecondaryWidget: &s.scaleSegmentedControl,
-		},
-		{
-			PrimaryWidget:   &s.preReleaseText,
-			SecondaryWidget: &s.preReleaseToggle,
 		},
 	})
 

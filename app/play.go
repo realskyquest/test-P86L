@@ -45,7 +45,13 @@ type Play struct {
 	content playContent
 	links   playLinks
 
+	formPre          basicwidget.Form
+	preReleaseText   basicwidget.Text
+	preReleaseToggle basicwidget.Toggle
+
 	model *p86l.Model
+
+	err *pd.Error
 }
 
 func (p *Play) SetModel(model *p86l.Model) {
@@ -53,7 +59,35 @@ func (p *Play) SetModel(model *p86l.Model) {
 }
 
 func (p *Play) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
+	data := p.model.Data()
+
+	if p.err != nil {
+		p86l.GErr = p.err
+		return p.err.Err
+	}
+
 	p.content.SetModel(p.model)
+
+	p.preReleaseText.SetValue(p86l.T("settings.prerelease"))
+	p.preReleaseToggle.SetOnValueChanged(func(value bool) {
+		if value {
+			data.SetUsePreRelease(true)
+		} else {
+			data.SetUsePreRelease(false)
+		}
+		p.err = data.Save()
+	})
+	if data.File().UsePreRelease {
+		p.preReleaseToggle.SetValue(true)
+	} else {
+		p.preReleaseToggle.SetValue(false)
+	}
+	p.formPre.SetItems([]basicwidget.FormItem{
+		{
+			PrimaryWidget:   &p.preReleaseText,
+			SecondaryWidget: &p.preReleaseToggle,
+		},
+	})
 
 	u := basicwidget.UnitSize(context)
 	gl := layout.GridLayout{
@@ -61,11 +95,13 @@ func (p *Play) Build(context *guigui.Context, appender *guigui.ChildWidgetAppend
 		Heights: []layout.Size{
 			layout.FlexibleSize(1),
 			layout.FixedSize(p.links.DefaultSize(context).Y),
+			layout.FixedSize(u * 2),
 		},
 		RowGap: u / 2,
 	}
 	appender.AppendChildWidgetWithBounds(&p.content, gl.CellBounds(0, 0))
 	appender.AppendChildWidgetWithBounds(&p.links, gl.CellBounds(0, 1))
+	appender.AppendChildWidgetWithBounds(&p.formPre, gl.CellBounds(0, 2))
 
 	return nil
 }
@@ -268,15 +304,16 @@ func (p *playContent) Build(context *guigui.Context, appender *guigui.ChildWidge
 	u := basicwidget.UnitSize(context)
 	gl := layout.GridLayout{
 		Bounds: context.Bounds(p),
-		Heights: []layout.Size{
-			layout.FlexibleSize(1),
-			layout.FixedSize(2 * u),
-			layout.FlexibleSize(1),
-		},
 		Widths: []layout.Size{
 			layout.FlexibleSize(1),
 			layout.FlexibleSize(1),
 			layout.FlexibleSize(1),
+		},
+		Heights: []layout.Size{
+			layout.FlexibleSize(1),
+			layout.FixedSize(2 * u),
+			layout.FlexibleSize(1),
+			layout.FixedSize(u * 2),
 		},
 	}
 	switch p.state {
