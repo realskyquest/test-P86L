@@ -46,6 +46,21 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+type breakWidget struct {
+	column int // Width
+	row    int // Height
+}
+
+func (b *breakWidget) Get() (column, row int) {
+	return b.column, b.row
+}
+
+// Width, Height
+func (b *breakWidget) Set(column, row int) {
+	b.column = column
+	b.row = row
+}
+
 func breakSize(context *guigui.Context, size int) bool {
 	scaledWidth := int(float64(context.AppSize().X) / context.AppScale())
 	return scaledWidth > size
@@ -142,15 +157,8 @@ func (r *Root) Build(context *guigui.Context, appender *guigui.ChildWidgetAppend
 	}
 	r.updateFontFaceSources(context)
 
-	x, y := ebiten.WindowPosition()
-	width, height := ebiten.WindowSize()
-	maximized := ebiten.IsWindowMaximized()
-	if !maximized {
-		data.SetPosition(x, y)
-		data.SetSize(width, height)
-	}
-	data.File().WindowMaximize = maximized
 	if ebiten.IsWindowBeingClosed() {
+		log.Info().Msg("P86L Closing")
 		r.err = data.Save()
 	}
 
@@ -222,7 +230,17 @@ func (r *Root) Build(context *guigui.Context, appender *guigui.ChildWidgetAppend
 }
 
 func (r *Root) Tick(context *guigui.Context) error {
+	data := r.model.Data()
 	cache := r.model.Cache()
+
+	x, y := ebiten.WindowPosition()
+	width, height := ebiten.WindowSize()
+	maximized := ebiten.IsWindowMaximized()
+	if !maximized {
+		data.SetPosition(x, y)
+		data.SetSize(width, height)
+	}
+	data.File().WindowMaximize = maximized
 
 	if ebiten.Tick()-r.lastTick >= int64(ebiten.TPS()*5) && !cache.Progress() {
 		r.lastTick = ebiten.Tick()
