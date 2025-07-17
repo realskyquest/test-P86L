@@ -27,6 +27,7 @@ import (
 	"p86l"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	"github.com/google/go-github/v71/github"
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
@@ -199,6 +200,7 @@ type sidebarStats struct {
 	ratelimitText     basicwidget.Text
 
 	ratelimitLeft int
+	ratelimitTime string
 	inProgress    bool
 	lastTick      int64
 
@@ -236,7 +238,9 @@ func (s *sidebarStats) Build(context *guigui.Context, appender *guigui.ChildWidg
 	s.versionText.SetHorizontalAlign(basicwidget.HorizontalAlignCenter)
 	s.versionText.SetVerticalAlign(basicwidget.VerticalAlignMiddle)
 
-	s.ratelimitText.SetValue(fmt.Sprintf("Ratelimit: %d / 60", s.ratelimitLeft))
+	s.ratelimitText.SetValue(fmt.Sprintf("%d / 60 requests - %s", s.ratelimitLeft, s.ratelimitTime))
+	s.ratelimitText.SetAutoWrap(true)
+	s.ratelimitText.SetHorizontalAlign(basicwidget.HorizontalAlignCenter)
 
 	u := basicwidget.UnitSize(context)
 	gl := layout.GridLayout{
@@ -245,7 +249,7 @@ func (s *sidebarStats) Build(context *guigui.Context, appender *guigui.ChildWidg
 			layout.FlexibleSize(1),
 			layout.FlexibleSize(1),
 			layout.FixedSize(s.versionText.DefaultSize(context).Y),
-			layout.FixedSize(s.ratelimitText.DefaultSize(context).Y),
+			layout.FixedSize(u * 2),
 		},
 		Widths: []layout.Size{
 			layout.FixedSize(u / 4),
@@ -274,8 +278,10 @@ func (s *sidebarStats) Tick(context *guigui.Context) error {
 
 			if limits != nil {
 				s.ratelimitLeft = limits.Core.Remaining
+				s.ratelimitTime = humanize.RelTime(time.Now(), limits.Core.Reset.Time, "remaining", "ago")
 			} else {
 				s.ratelimitLeft = -1
+				s.ratelimitTime = ""
 			}
 
 			s.inProgress = false
