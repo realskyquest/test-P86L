@@ -129,7 +129,10 @@ func generateFile(tmplContent string, outputPath string, data Version) error {
 	if err != nil {
 		return fmt.Errorf("error creating %s: %w", outputPath, err)
 	}
-	defer outputFile.Close()
+	defer func() {
+		err := outputFile.Close()
+		fmt.Println(fmt.Errorf("error closing %s: %w", outputPath, err))
+	}()
 
 	if err := tmpl.Execute(outputFile, data); err != nil {
 		return fmt.Errorf("error executing template: %w", err)
