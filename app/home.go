@@ -22,12 +22,12 @@
 package app
 
 import (
-	"fmt"
 	"p86l"
 	"p86l/assets"
 	pd "p86l/internal/debug"
 	"sync"
 
+	"github.com/dustin/go-humanize"
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/guigui"
 	"github.com/hajimehoshi/guigui/basicwidget"
@@ -53,6 +53,7 @@ func (h *Home) Build(context *guigui.Context, appender *guigui.ChildWidgetAppend
 
 	var gl layout.GridLayout
 	u := basicwidget.UnitSize(context)
+
 	if breakSize(context, 620) {
 		gl = layout.GridLayout{
 			Bounds: context.Bounds(h),
@@ -140,15 +141,13 @@ func (h *homeStats) Build(context *guigui.Context, appender *guigui.ChildWidgetA
 		},
 	})
 
-	// --
-
 	h.downloadsText.SetValue(p86l.T("home.downloads"))
 	h.versionText.SetValue(p86l.T("home.version"))
 
 	if cache.IsValid() {
 		for _, asset := range cacheAssets {
 			if name := asset.GetName(); p86l.IsValidGameFile(name) {
-				h.downloadsStatText.SetValue(fmt.Sprintf("%d", asset.GetDownloadCount()))
+				h.downloadsStatText.SetValue(humanize.FormatInteger("#,###.", asset.GetDownloadCount()))
 				break
 			}
 		}
@@ -169,9 +168,17 @@ func (h *homeStats) Build(context *guigui.Context, appender *guigui.ChildWidgetA
 		},
 	})
 
+	var gl layout.GridLayout
+	var glT layout.GridLayout
+	var bSmall bool
+	var bImage breakWidget
+	var bForm1 breakWidget
+	var bForm2 breakWidget
+
 	u := basicwidget.UnitSize(context)
+
 	if breakSize(context, 620) {
-		gl := layout.GridLayout{
+		gl = layout.GridLayout{
 			Bounds: context.Bounds(h),
 			Widths: []layout.Size{
 				layout.FixedSize(u*3 - (u / 2)),
@@ -184,12 +191,12 @@ func (h *homeStats) Build(context *guigui.Context, appender *guigui.ChildWidgetA
 			},
 			ColumnGap: u / 2,
 		}
-
-		appender.AppendChildWidgetWithBounds(&h.image, gl.CellBounds(0, 1))
-		appender.AppendChildWidgetWithBounds(&h.form1, gl.CellBounds(1, 1))
-		appender.AppendChildWidgetWithBounds(&h.form2, gl.CellBounds(2, 1))
+		bImage.Set(0, 1)
+		bForm1.Set(1, 1)
+		bForm2.Set(2, 1)
+		bSmall = false
 	} else {
-		gl := layout.GridLayout{
+		gl = layout.GridLayout{
 			Bounds: context.Bounds(h),
 			Widths: []layout.Size{
 				layout.FixedSize(u / 2),
@@ -203,18 +210,26 @@ func (h *homeStats) Build(context *guigui.Context, appender *guigui.ChildWidgetA
 			},
 			ColumnGap: u / 2,
 		}
-		glT := layout.GridLayout{
-			Bounds: gl.CellBounds(1, 1),
-			Widths: []layout.Size{
-				layout.FixedSize(u*3 - (u / 2)),
-				layout.FlexibleSize(1),
-			},
-		}
-
-		appender.AppendChildWidgetWithBounds(&h.image, glT.CellBounds(0, 0))
-		appender.AppendChildWidgetWithBounds(&h.form1, glT.CellBounds(1, 0))
-		appender.AppendChildWidgetWithBounds(&h.form2, gl.CellBounds(1, 2))
+		bImage.Set(0, 0)
+		bForm1.Set(1, 0)
+		bForm2.Set(1, 2)
+		bSmall = true
 	}
+	glT = layout.GridLayout{
+		Bounds: gl.CellBounds(1, 1),
+		Widths: []layout.Size{
+			layout.FixedSize(u*3 - (u / 2)),
+			layout.FlexibleSize(1),
+		},
+	}
+	if bSmall {
+		appender.AppendChildWidgetWithBounds(&h.image, glT.CellBounds(bImage.Get()))
+		appender.AppendChildWidgetWithBounds(&h.form1, glT.CellBounds(bForm1.Get()))
+	} else {
+		appender.AppendChildWidgetWithBounds(&h.image, gl.CellBounds(bImage.Get()))
+		appender.AppendChildWidgetWithBounds(&h.form1, gl.CellBounds(bForm1.Get()))
+	}
+	appender.AppendChildWidgetWithBounds(&h.form2, gl.CellBounds(bForm2.Get()))
 
 	return nil
 }

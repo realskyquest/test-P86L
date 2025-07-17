@@ -120,8 +120,8 @@ func (s *sidebarContent) Build(context *guigui.Context, appender *guigui.ChildWi
 	gl := layout.GridLayout{
 		Bounds: context.Bounds(s),
 		Heights: []layout.Size{
-			layout.FlexibleSize(1),
-			layout.FlexibleSize(1),
+			layout.FlexibleSize(2),
+			layout.FlexibleSize(3),
 		},
 	}
 	appender.AppendChildWidgetWithBounds(&s.list, gl.CellBounds(0, 0))

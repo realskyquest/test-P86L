@@ -412,8 +412,14 @@ func (p *playLinks) Build(context *guigui.Context, appender *guigui.ChildWidgetA
 		go p86l.OpenBrowser(configs.Patreon)
 	})
 
-	u := basicwidget.UnitSize(context)
 	var gl layout.GridLayout
+	var bWebsiteButton breakWidget
+	var bGithubButton breakWidget
+	var bDiscordButton breakWidget
+	var bPatreonButton breakWidget
+
+	u := basicwidget.UnitSize(context)
+
 	if breakSize(context, 1024) {
 		gl = layout.GridLayout{
 			Bounds: context.Bounds(p),
@@ -432,10 +438,10 @@ func (p *playLinks) Build(context *guigui.Context, appender *guigui.ChildWidgetA
 			RowGap:    u / 2,
 			ColumnGap: u / 2,
 		}
-		appender.AppendChildWidgetWithBounds(&p.websiteButton, gl.CellBounds(0, 0))
-		appender.AppendChildWidgetWithBounds(&p.githubButton, gl.CellBounds(1, 0))
-		appender.AppendChildWidgetWithBounds(&p.discordButton, gl.CellBounds(2, 0))
-		appender.AppendChildWidgetWithBounds(&p.patreonButton, gl.CellBounds(3, 0))
+		bWebsiteButton.Set(0, 0)
+		bGithubButton.Set(1, 0)
+		bDiscordButton.Set(2, 0)
+		bPatreonButton.Set(3, 0)
 	} else if breakSize(context, 640) {
 		gl = layout.GridLayout{
 			Bounds: context.Bounds(p),
@@ -450,10 +456,10 @@ func (p *playLinks) Build(context *guigui.Context, appender *guigui.ChildWidgetA
 			RowGap:    u / 2,
 			ColumnGap: u / 2,
 		}
-		appender.AppendChildWidgetWithBounds(&p.websiteButton, gl.CellBounds(0, 0))
-		appender.AppendChildWidgetWithBounds(&p.githubButton, gl.CellBounds(0, 1))
-		appender.AppendChildWidgetWithBounds(&p.discordButton, gl.CellBounds(1, 0))
-		appender.AppendChildWidgetWithBounds(&p.patreonButton, gl.CellBounds(1, 1))
+		bWebsiteButton.Set(0, 0)
+		bGithubButton.Set(0, 1)
+		bDiscordButton.Set(1, 0)
+		bPatreonButton.Set(1, 1)
 	} else {
 		gl = layout.GridLayout{
 			Bounds: context.Bounds(p),
@@ -466,11 +472,15 @@ func (p *playLinks) Build(context *guigui.Context, appender *guigui.ChildWidgetA
 			RowGap:    u / 2,
 			ColumnGap: u / 2,
 		}
-		appender.AppendChildWidgetWithBounds(&p.websiteButton, gl.CellBounds(0, 0))
-		appender.AppendChildWidgetWithBounds(&p.githubButton, gl.CellBounds(0, 1))
-		appender.AppendChildWidgetWithBounds(&p.discordButton, gl.CellBounds(0, 2))
-		appender.AppendChildWidgetWithBounds(&p.patreonButton, gl.CellBounds(0, 3))
+		bWebsiteButton.Set(0, 0)
+		bGithubButton.Set(0, 1)
+		bDiscordButton.Set(0, 2)
+		bPatreonButton.Set(0, 3)
 	}
+	appender.AppendChildWidgetWithBounds(&p.websiteButton, gl.CellBounds(bWebsiteButton.Get()))
+	appender.AppendChildWidgetWithBounds(&p.githubButton, gl.CellBounds(bGithubButton.Get()))
+	appender.AppendChildWidgetWithBounds(&p.discordButton, gl.CellBounds(bDiscordButton.Get()))
+	appender.AppendChildWidgetWithBounds(&p.patreonButton, gl.CellBounds(bPatreonButton.Get()))
 
 	return nil
 }

@@ -101,9 +101,16 @@ func (a *aboutCredits) Build(context *guigui.Context, appender *guigui.ChildWidg
 	a.devText.SetScale(1.2)
 	a.devText.SetHorizontalAlign(basicwidget.HorizontalAlignCenter)
 
+	var gl layout.GridLayout
+	var bLeadText breakWidget
+	var bLeadImage breakWidget
+	var bDevText breakWidget
+	var bDevImage breakWidget
+
 	u := basicwidget.UnitSize(context)
+
 	if breakSize(context, 760) {
-		gl := layout.GridLayout{
+		gl = layout.GridLayout{
 			Bounds: context.Bounds(a),
 			Widths: []layout.Size{
 				layout.FlexibleSize(1),
@@ -118,13 +125,12 @@ func (a *aboutCredits) Build(context *guigui.Context, appender *guigui.ChildWidg
 			},
 			ColumnGap: u,
 		}
-
-		appender.AppendChildWidgetWithBounds(&a.leadText, gl.CellBounds(1, 0))
-		appender.AppendChildWidgetWithBounds(&a.leadImg, gl.CellBounds(2, 0))
-		appender.AppendChildWidgetWithBounds(&a.devText, gl.CellBounds(3, 0))
-		appender.AppendChildWidgetWithBounds(&a.devImg, gl.CellBounds(4, 0))
+		bLeadText.Set(1, 0)
+		bLeadImage.Set(2, 0)
+		bDevText.Set(3, 0)
+		bDevImage.Set(4, 0)
 	} else {
-		gl := layout.GridLayout{
+		gl = layout.GridLayout{
 			Bounds: context.Bounds(a),
 			Widths: []layout.Size{
 				layout.FlexibleSize(1),
@@ -139,12 +145,15 @@ func (a *aboutCredits) Build(context *guigui.Context, appender *guigui.ChildWidg
 			ColumnGap: u,
 			RowGap:    u / 2,
 		}
-
-		appender.AppendChildWidgetWithBounds(&a.leadText, gl.CellBounds(1, 0))
-		appender.AppendChildWidgetWithBounds(&a.leadImg, gl.CellBounds(2, 0))
-		appender.AppendChildWidgetWithBounds(&a.devText, gl.CellBounds(1, 1))
-		appender.AppendChildWidgetWithBounds(&a.devImg, gl.CellBounds(2, 1))
+		bLeadText.Set(1, 0)
+		bLeadImage.Set(2, 0)
+		bDevText.Set(1, 1)
+		bDevImage.Set(2, 1)
 	}
+	appender.AppendChildWidgetWithBounds(&a.leadText, gl.CellBounds(bLeadText.Get()))
+	appender.AppendChildWidgetWithBounds(&a.leadImg, gl.CellBounds(bLeadImage.Get()))
+	appender.AppendChildWidgetWithBounds(&a.devText, gl.CellBounds(bDevText.Get()))
+	appender.AppendChildWidgetWithBounds(&a.devImg, gl.CellBounds(bDevImage.Get()))
 
 	return nil
 }
