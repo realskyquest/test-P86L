@@ -103,6 +103,8 @@ func (r *Root) updateFontFaceSources(context *guigui.Context) {
 }
 
 func (r *Root) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
+	data := r.model.Data()
+
 	r.sync.Do(func() {
 		err1 := r.runApp()
 		err2 := p86l.LoadB(context, &r.model, "data")
@@ -122,6 +124,16 @@ func (r *Root) Build(context *guigui.Context, appender *guigui.ChildWidgetAppend
 		log.Info().Str("Detected OS", runtime.GOOS).Msg("Operating System")
 		log.Info().Str("Graphics API", gpuInfo.GraphicsLibrary.String()).Msg("GPU")
 		log.Warn().Str("LICENSE", p86l.ALicense).Msg("README")
+
+		if data.File().WindowX > 0 || data.File().WindowY > 0 {
+			ebiten.SetWindowPosition(data.File().WindowX, data.File().WindowY)
+		}
+		if data.File().WindowWidth > 0 || data.File().WindowHeight > 0 {
+			ebiten.SetWindowSize(data.File().WindowWidth, data.File().WindowHeight)
+		}
+		if data.File().WindowMaximize {
+			ebiten.MaximizeWindow()
+		}
 	})
 
 	if r.err != nil {
@@ -129,6 +141,18 @@ func (r *Root) Build(context *guigui.Context, appender *guigui.ChildWidgetAppend
 		return r.err.Err
 	}
 	r.updateFontFaceSources(context)
+
+	x, y := ebiten.WindowPosition()
+	width, height := ebiten.WindowSize()
+	maximized := ebiten.IsWindowMaximized()
+	if !maximized {
+		data.SetPosition(x, y)
+		data.SetSize(width, height)
+	}
+	data.File().WindowMaximize = maximized
+	if ebiten.IsWindowBeingClosed() {
+		data.Save()
+	}
 
 	r.background.SetModel(&r.model)
 	r.sidebar.SetModel(&r.model)
@@ -199,6 +223,7 @@ func (r *Root) Build(context *guigui.Context, appender *guigui.ChildWidgetAppend
 
 func (r *Root) Tick(context *guigui.Context) error {
 	cache := r.model.Cache()
+
 	if ebiten.Tick()-r.lastTick >= int64(ebiten.TPS()*5) && !cache.Progress() {
 		r.lastTick = ebiten.Tick()
 		cache.SetProgress(true)

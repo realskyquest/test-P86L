@@ -12,12 +12,17 @@ import (
 )
 
 type Data struct {
-	V             int              `json:"v"`
-	Locale        string           `json:"locale"`
-	AppScale      int              `json:"app_scale"`
-	ColorMode     guigui.ColorMode `json:"color_mode"`
-	UsePreRelease bool             `json:"use_pre_release"`
-	GameVersion   string           `json:"game_version"`
+	V              int              `json:"v"`
+	WindowX        int              `json:"window_x"`
+	WindowY        int              `json:"window_y"`
+	WindowWidth    int              `json:"window_width"`
+	WindowHeight   int              `json:"window_height"`
+	WindowMaximize bool             `json:"window_maximize"`
+	Locale         string           `json:"locale"`
+	AppScale       int              `json:"app_scale"`
+	ColorMode      guigui.ColorMode `json:"color_mode"`
+	UsePreRelease  bool             `json:"use_pre_release"`
+	GameVersion    string           `json:"game_version"`
 }
 
 func (d *Data) Log() {

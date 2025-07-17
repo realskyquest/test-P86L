@@ -74,6 +74,9 @@ func LoadB(context *guigui.Context, model *Model, loadType string) *pd.Error {
 		if rErr != nil {
 			return E.New(rErr, pd.DataError, pd.ErrDataLocaleInvalid)
 		}
+		model.data.SetPosition(d.WindowX, d.WindowY)
+		model.data.SetSize(d.WindowWidth, d.WindowHeight)
+		model.data.File().WindowMaximize = d.WindowMaximize
 		model.data.SetLocale(context, tag)
 		model.data.SetAppScale(context, d.AppScale)
 		model.data.SetColorMode(context, d.ColorMode)

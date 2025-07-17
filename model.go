@@ -79,12 +79,17 @@ type DataModel struct {
 
 func NewData() file.Data {
 	return file.Data{
-		V:             0,
-		Locale:        language.English.String(),
-		AppScale:      2,
-		ColorMode:     guigui.ColorModeLight,
-		GameVersion:   "",
-		UsePreRelease: false,
+		V:              0,
+		WindowX:        0,
+		WindowY:        0,
+		WindowWidth:    0,
+		WindowHeight:   0,
+		WindowMaximize: false,
+		Locale:         language.English.String(),
+		AppScale:       2,
+		ColorMode:      guigui.ColorModeLight,
+		GameVersion:    "",
+		UsePreRelease:  false,
 	}
 }
 
@@ -128,6 +133,16 @@ func (d *DataModel) GetAppScaleF(scale int) float64 {
 	}
 
 	return -1
+}
+
+func (d *DataModel) SetPosition(x, y int) {
+	d.file.WindowX = x
+	d.file.WindowY = y
+}
+
+func (d *DataModel) SetSize(width, height int) {
+	d.file.WindowWidth = width
+	d.file.WindowHeight = height
 }
 
 func (d *DataModel) SetLocale(context *guigui.Context, locale language.Tag) {
