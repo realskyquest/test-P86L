@@ -24,11 +24,8 @@ package app
 import (
 	"p86l"
 	"p86l/assets"
-	pd "p86l/internal/debug"
-	"sync"
 
 	"github.com/dustin/go-humanize"
-	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/guigui"
 	"github.com/hajimehoshi/guigui/basicwidget"
 	"github.com/hajimehoshi/guigui/layout"
@@ -99,11 +96,6 @@ type homeStats struct {
 	versionStatText   basicwidget.Text
 
 	model *p86l.Model
-
-	cachedImage *ebiten.Image
-
-	sync sync.Once
-	err  *pd.Error
 }
 
 func (h *homeStats) SetModel(model *p86l.Model) {
@@ -111,23 +103,16 @@ func (h *homeStats) SetModel(model *p86l.Model) {
 }
 
 func (h *homeStats) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
-	h.sync.Do(func() {
-		images, err := assets.GetIconImages(p86l.E)
-		if err != nil {
-			h.err = err
-		}
-		h.cachedImage = ebiten.NewImageFromImage(images[len(images)-1])
-	})
+	img, err := assets.TheImageCache.Get(p86l.E, "p86l")
+	h.image.SetImage(img)
 
-	if h.err != nil {
-		p86l.GErr = h.err
-		return h.err.Err
+	if err != nil {
+		p86l.GErr = err
+		return err.Err
 	}
 
 	cache := h.model.Cache()
 	cacheAssets := cache.File().Repo.Assets
-
-	h.image.SetImage(h.cachedImage)
 
 	h.welcomeText.SetValue(p86l.T("home.welcome"))
 	h.welcomeStatText.SetValue(p86l.GetUsername())
