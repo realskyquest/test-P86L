@@ -8,16 +8,36 @@ vars:
 
 tasks:
   clean:
+    desc: Clean build artifacts
+    dir: cmd/p86l
     cmds:
-      - rm cmd/p86l/versioninfo.json
-      - rm cmd/p86l/app.manifest
-      - rm cmd/p86l/resource.syso
+      - rm -f ../../bin/*
+      - rm -f versioninfo.json
+      - rm -f app.manifest
+      - rm -f resource.syso
+    sources:
+      - versioninfo.json
+      - app.manifest
+      - resource.syso
+    status:
+      - test -z "$(find ../../bin -maxdepth 1 -type f -print -quit)"
+      - test ! -f versioninfo.json
+      - test ! -f app.manifest
+      - test ! -f resource.syso
 
   generate-version-info:
     desc: Generate versioninfo.json with proper version data
     cmds:
       - go run scripts/version.go {{default "v0.0.0" .VERSION}} {{.COMMIT_COUNT}}
       - go generate cmd/p86l/main.go
+    sources:
+      - scripts/version.go
+      - .git/HEAD
+      - .git/refs/tags/*
+    generates:
+      - cmd/p86l/versioninfo.json
+      - cmd/p86l/app.manifest
+      - cmd/p86l/resource.syso
       
   run:
     cmds:
@@ -27,6 +47,9 @@ tasks:
     cmds:
       - P86L_DEBUG=logs go run cmd/p86l/main.go
 
+  build:
+    deps: [checksum]
+
   build:debug:
     cmds:
       - go build -tags release -ldflags "-s -w" -trimpath -o bin/ cmd/p86l/main.go
@@ -34,7 +57,66 @@ tasks:
   build:windows:
     cmds:
       - GOOS=windows GOARCH=amd64 go build -tags 'release' -ldflags "-s -w -X main.version={{.VERSION}} -X=runtime.godebugDefault=asyncpreemptoff=1 -H=windowsgui" -trimpath -o bin/Project-86-Launcher-{{.VERSION}}.exe ./cmd/p86l
+    generates:
+      - bin/Project-86-Launcher-*.exe
 
   build:windows-cjk:
     cmds:
       - GOOS=windows GOARCH=amd64 go build -tags 'release,cjk' -ldflags "-s -w -X main.version={{.VERSION}} -X=runtime.godebugDefault=asyncpreemptoff=1 -H=windowsgui" -trimpath -o bin/Project-86-Launcher-cjk-{{.VERSION}}.exe ./cmd/p86l
+    generates:
+      - bin/Project-86-Launcher-cjk-*.exe
+
+  zip:
+    desc: Create ZIP archives for Windows executables
+    deps: [build:windows, zip:assets]
+    dir: bin
+    cmds:
+      - |
+        for exe in *.exe; do
+          APP_DIR="Project-86-Launcher"
+          mkdir -p "$APP_DIR"
+
+          cp "$exe" "$APP_DIR/"
+          cp run.bat "$APP_DIR/"
+          cp p86l.ico "$APP_DIR/"
+          cp p86l.png "$APP_DIR/"
+
+          zip -r "${exe%.exe}.zip" "$APP_DIR"
+          rm -rf "$APP_DIR"
+        done
+    sources:
+      - "*.exe"
+      - "run.bat"
+      - "p86l.ico"
+      - "p86l.png"
+    generates:
+      - "*.zip"
+
+  zip:assets:
+    desc: Copy assets needed for zip to bin directory
+    cmds:
+      - cp assets/run.bat bin/
+      - cp assets/p86l.ico bin/
+      - cp assets/p86l.png bin/
+    sources:
+      - assets/run.bat
+      - assets/p86l.ico
+      - assets/p86l.png
+    generates:
+      - bin/run.bat
+      - bin/p86l.ico
+      - bin/p86l.png
+
+  checksum:
+    desc: Generate SHA256 checksums for release files
+    deps: [zip]
+    dir: bin
+    cmds:
+      - sha256sum *.exe run.bat *.ico *.png > sha256sum.txt
+    sources:
+      - "*.exe"
+      - "run.bat"
+      - "*.ico"
+      - "*.png"
+    generates:
+      - sha256sum.txt
