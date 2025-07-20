@@ -36,6 +36,7 @@ import (
 type Model struct {
 	mode string
 
+	version *version.Version
 	progress string
 
 	data  DataModel
@@ -49,6 +50,10 @@ func (m *Model) Mode() string {
 	return m.mode
 }
 
+func (m *Model) Version() *version.Version {
+	return m.version
+}
+
 func (m *Model) Progress() string {
 	return m.progress
 }
@@ -56,6 +61,15 @@ func (m *Model) Progress() string {
 func (m *Model) SetMode(mode string) {
 	log.Info().Str("Page", mode).Msg("Sidebar")
 	m.mode = mode
+}
+
+func (m *Model) SetVersion(value string) *pd.Error {
+	v, err := version.NewVersion(value)
+	if err != nil {
+			return E.New(err, pd.AppError, pd.ErrLauncherVersionInvalid)
+	}
+	m.version = v
+	return nil
 }
 
 func (m *Model) SetProgress(progress string) {

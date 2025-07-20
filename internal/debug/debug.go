@@ -49,6 +49,7 @@ const (
 	// App errors (1001-1999)
 	ErrUnknown int = iota + 1001
 	ErrBrowserOpen
+	ErrLauncherVersionInvalid
 	ErrGameVersionInvalid
 	ErrGameNotExist
 	ErrGameRunning

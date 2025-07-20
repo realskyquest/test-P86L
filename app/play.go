@@ -23,6 +23,7 @@ package app
 
 import (
 	"cmp"
+	gctx "context"
 	"fmt"
 	"os/exec"
 	"p86l"
@@ -119,9 +120,10 @@ func (p *Play) Build(context *guigui.Context, appender *guigui.ChildWidgetAppend
 type playContent struct {
 	guigui.DefaultWidget
 
-	installButton basicwidget.Button
-	playButton    basicwidget.Button
-	updateButton  basicwidget.Button
+	installButton  basicwidget.Button
+	playButton     basicwidget.Button
+	updateButton   basicwidget.Button
+	launcherButton basicwidget.Button
 
 	state      int
 	inProgress bool
@@ -130,6 +132,8 @@ type playContent struct {
 	gameMutex   sync.Mutex
 
 	model *p86l.Model
+
+	sync sync.Once
 }
 
 func (p *playContent) SetModel(model *p86l.Model) {
@@ -274,6 +278,29 @@ func (p *playContent) Build(context *guigui.Context, appender *guigui.ChildWidge
 	data := p.model.Data()
 	cache := p.model.Cache()
 
+	p.sync.Do(func() {
+		context.SetEnabled(&p.launcherButton, false)
+		go func() {
+			ctx := gctx.Background()
+			release, _, rErr := p86l.GithubClient.Repositories.GetLatestRelease(ctx, configs.CompanyName, configs.AppName)
+			if rErr != nil {
+				log.Error().Any("Launcher release", rErr).Msg(pd.NetworkManager)
+				return
+			}
+			if p.model.Version() != nil {
+				value, err := p86l.CheckNewerVersion(p86l.TheDebugMode.Version, release.GetTagName())
+				if err != nil {
+					p86l.E.SetToast(err)
+					return
+				}
+				log.Info().Str("playContent", "Build").Msg("Launcher Updater")
+				if value {
+					context.SetEnabled(&p.launcherButton, true)
+				}
+			}
+		}()
+	})
+
 	p.installButton.SetOnDown(func() {
 		if p.state != 0 && !cache.IsValid() {
 			return
@@ -284,6 +311,9 @@ func (p *playContent) Build(context *guigui.Context, appender *guigui.ChildWidge
 	p.updateButton.SetOnDown(func() {
 		p.handleUpdate(context)
 	})
+	p.launcherButton.SetOnDown(func(){
+		
+	})
 
 	if data.File().UsePreRelease {
 		p.installButton.SetText(p86l.T("play.prerelease"))
@@ -292,6 +322,7 @@ func (p *playContent) Build(context *guigui.Context, appender *guigui.ChildWidge
 	}
 	p.playButton.SetText(p86l.T("play.play"))
 	p.updateButton.SetText(p86l.T("play.update"))
+	p.launcherButton.SetText(p86l.T("play.launcher"))
 
 	if data.File().UsePreRelease {
 		if err := p86l.FS.IsDirR(p86l.E, filepath.Join(p86l.FS.DirBuildPath(), "pregame", "Project-86.exe")); err == nil {
@@ -341,7 +372,7 @@ func (p *playContent) Build(context *guigui.Context, appender *guigui.ChildWidge
 		Bounds: context.Bounds(p),
 		Widths: []layout.Size{
 			layout.FlexibleSize(1),
-			layout.FlexibleSize(1),
+			layout.FlexibleSize(2),
 			layout.FlexibleSize(1),
 		},
 		Heights: []layout.Size{
@@ -350,20 +381,22 @@ func (p *playContent) Build(context *guigui.Context, appender *guigui.ChildWidge
 			layout.FlexibleSize(1),
 		},
 	}
+	glI := layout.GridLayout{
+		Bounds: gl.CellBounds(1, 1),
+		Widths: []layout.Size{
+			layout.FlexibleSize(1),
+			layout.FlexibleSize(1),
+			layout.FlexibleSize(1),
+		},
+		ColumnGap: u / 2,
+	}
 	switch p.state {
 	case 0:
 		appender.AppendChildWidgetWithBounds(&p.installButton, gl.CellBounds(1, 1))
 	case 1:
-		glI := layout.GridLayout{
-			Bounds: gl.CellBounds(1, 1),
-			Widths: []layout.Size{
-				layout.FlexibleSize(1),
-				layout.FlexibleSize(1),
-			},
-			ColumnGap: u / 2,
-		}
 		appender.AppendChildWidgetWithBounds(&p.playButton, glI.CellBounds(0, 0))
 		appender.AppendChildWidgetWithBounds(&p.updateButton, glI.CellBounds(1, 0))
+		appender.AppendChildWidgetWithBounds(&p.launcherButton, glI.CellBounds(2, 0))
 	}
 
 	return nil

@@ -130,6 +130,13 @@ func (r *Root) Build(context *guigui.Context, appender *guigui.ChildWidgetAppend
 			return
 		}
 
+		if launcherVersion := p86l.TheDebugMode.Version; launcherVersion != "dev" {
+			err4 := r.model.SetVersion(launcherVersion)
+			if err4 != nil {
+				err4.LogErr("Root.sync", "Build")
+			}
+		}
+
 		r.model.Cache().Translate(r.model.Data().File().Locale)
 		var gpuInfo ebiten.DebugInfo
 		ebiten.ReadDebugInfo(&gpuInfo)
@@ -252,8 +259,7 @@ func (r *Root) Tick(context *guigui.Context) error {
 				ctx := gctx.Background()
 				release, _, rErr := p86l.GithubClient.Repositories.GetLatestRelease(ctx, configs.RepoOwner, configs.RepoName)
 				if rErr != nil {
-					log.Error().Any("Release", rErr).Msg(pd.NetworkManager)
-					p86l.E.SetToast(p86l.E.New(rErr, pd.NetworkError, pd.ErrNetworkCacheRequest))
+					log.Error().Any("Game release", rErr).Msg(pd.NetworkManager)
 					cache.SetProgress(false)
 					return
 				}

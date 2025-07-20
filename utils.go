@@ -242,6 +242,10 @@ func DownloadGame(model *Model, filename, src string, preRelease bool) *pd.Error
 	return nil
 }
 
+func DownloadLauncher() {
+	// TODO: 
+}
+
 func DownloadFile(model *Model, filename, src, dest string) *pd.Error {
 	var resumePos int64 = 0
 	if info, err := FS.Root.Stat(dest); err == nil {
