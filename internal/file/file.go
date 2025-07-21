@@ -52,17 +52,17 @@ type AppFS struct {
 }
 
 // Make new FS for app.
-func NewFS(dm *pd.Debug, extra ...string) (*AppFS, *pd.Error) {
+func NewFS(extra ...string) (*AppFS, *pd.Error) {
 	// Handles the company path and a path for debugging.
 	var companyPath string
 	if len(extra) == 1 && extra[0] != "" {
-		cPath, err := GetCompanyPath(dm, extra[0])
+		cPath, err := GetCompanyPath(extra[0])
 		if err != nil {
 			return nil, err
 		}
 		companyPath = cPath
 	} else {
-		cPath, err := GetCompanyPath(dm)
+		cPath, err := GetCompanyPath()
 		if err != nil {
 			return nil, err
 		}

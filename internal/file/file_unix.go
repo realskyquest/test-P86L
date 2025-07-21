@@ -31,7 +31,7 @@ import (
 	"path/filepath"
 )
 
-func GetCompanyPath(dm *pd.Debug, extra ...string) (string, *pd.Error) {
+func GetCompanyPath(extra ...string) (string, *pd.Error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", pd.New(err, pd.FSError, pd.ErrFSDirInvalid)
@@ -41,8 +41,8 @@ func GetCompanyPath(dm *pd.Debug, extra ...string) (string, *pd.Error) {
 	if len(extra) == 1 && extra[0] != "" {
 		dataPath = fmt.Sprintf("%s_%s", dataPath, extra[0])
 	}
-	if dErr := mkdirAll(dataPath); dErr != nil {
-		return "", dErr
+	if err := mkdirAll(dataPath); err != nil {
+		return "", err
 	}
 	return dataPath, nil
 }

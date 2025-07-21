@@ -155,7 +155,7 @@ func (a *AppModel) Error() *pd.Error {
 // -- Setters for AppModel --
 
 func (a *AppModel) SetFileSystem() *pd.Error {
-	fs, err := file.NewFS(a.d)
+	fs, err := file.NewFS()
 	if err != nil {
 		return err
 	}

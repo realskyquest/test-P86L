@@ -29,7 +29,7 @@ import (
 	"path/filepath"
 )
 
-func GetCompanyPath(dm *pd.Debug, extra ...string) (string, *pd.Error) {
+func GetCompanyPath(extra ...string) (string, *pd.Error) {
 	appData := os.Getenv("APPDATA")
 	if appData == "" {
 		return "", pd.New(fmt.Errorf("APPDATA not set"), pd.FSError, pd.ErrFSDirInvalid)
@@ -39,8 +39,8 @@ func GetCompanyPath(dm *pd.Debug, extra ...string) (string, *pd.Error) {
 	if len(extra) == 1 && extra[0] != "" {
 		dataPath = fmt.Sprintf("%s_%s", dataPath, extra[0])
 	}
-	if dErr := mkdirAll(dm, dataPath); dErr != nil {
-		return "", dErr
+	if err := mkdirAll(dataPath); err != nil {
+		return "", err
 	}
 	return dataPath, nil
 }

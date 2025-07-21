@@ -31,7 +31,7 @@ import (
 
 func setup(t *testing.T) (*pd.Debug, *file.AppFS) {
 	e := &pd.Debug{}
-	a, err := file.NewFS(e, "test")
+	a, err := file.NewFS("test")
 	if err != nil {
 		t.Fatalf("%#v", err)
 	}
