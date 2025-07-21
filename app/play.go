@@ -387,26 +387,56 @@ func (p *playContent) Build(context *guigui.Context, appender *guigui.ChildWidge
 		},
 		Heights: []layout.Size{
 			layout.FlexibleSize(1),
-			layout.FixedSize(2 * u),
+			layout.LazySize(func(rowOrColumn int) layout.Size {
+				if breakSize(context, 620) {
+					return layout.FixedSize(u * 2)
+				}
+				return layout.FixedSize(u * 4)
+			}),
 			layout.FlexibleSize(1),
 		},
 	}
-	glI := layout.GridLayout{
-		Bounds: gl.CellBounds(1, 1),
-		Widths: []layout.Size{
-			layout.FlexibleSize(1),
-			layout.FlexibleSize(1),
-			layout.FlexibleSize(1),
-		},
-		ColumnGap: u / 2,
+	var glI layout.GridLayout
+	var bPlayButton breakWidget
+	var bUpdateButton breakWidget
+	var bLauncherButton breakWidget
+	if breakSize(context, 620) {
+		glI = layout.GridLayout{
+			Bounds: gl.CellBounds(1, 1),
+			Widths: []layout.Size{
+				layout.FlexibleSize(1),
+				layout.FlexibleSize(1),
+				layout.FlexibleSize(1),
+			},
+			ColumnGap: u / 2,
+		}
+		bPlayButton.Set(0, 0)
+		bUpdateButton.Set(1, 0)
+		bLauncherButton.Set(2, 0)
+	} else {
+		glI = layout.GridLayout{
+			Bounds: gl.CellBounds(1, 1),
+			Widths: []layout.Size{
+				layout.FlexibleSize(1),
+			},
+			Heights: []layout.Size{
+				layout.FixedSize(u),
+				layout.FixedSize(u),
+				layout.FixedSize(u),
+			},
+			RowGap: u / 2,
+		}
+		bPlayButton.Set(0, 0)
+		bUpdateButton.Set(0, 1)
+		bLauncherButton.Set(0, 2)
 	}
 	switch p.state {
 	case 0:
 		appender.AppendChildWidgetWithBounds(&p.installButton, gl.CellBounds(1, 1))
 	case 1:
-		appender.AppendChildWidgetWithBounds(&p.playButton, glI.CellBounds(0, 0))
-		appender.AppendChildWidgetWithBounds(&p.updateButton, glI.CellBounds(1, 0))
-		appender.AppendChildWidgetWithBounds(&p.launcherButton, glI.CellBounds(2, 0))
+		appender.AppendChildWidgetWithBounds(&p.playButton, glI.CellBounds(bPlayButton.Get()))
+		appender.AppendChildWidgetWithBounds(&p.updateButton, glI.CellBounds(bUpdateButton.Get()))
+		appender.AppendChildWidgetWithBounds(&p.launcherButton, glI.CellBounds(bLauncherButton.Get()))
 	}
 
 	return nil
