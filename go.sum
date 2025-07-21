@@ -2,8 +2,6 @@ github.com/BurntSushi/toml v1.5.0 h1:W5quZX/G/csjUnuI8SUYlsHs9M38FC7znL0lIO+DvMg
 github.com/BurntSushi/toml v1.5.0/go.mod h1:ukJfTF/6rtPPRCnwkur4qwRxa8vTRFBF0uk2lLoLwho=
 github.com/Conight/go-googletrans v0.2.4 h1:5+Iq8arEWtjJ8sfI4qGN2V8n/kwott164Zk7aUErC5Y=
 github.com/Conight/go-googletrans v0.2.4/go.mod h1:vl4tB0jWplJ1ZsEul86jXSMUrM+llD1qHK2XbjVBwvk=
-github.com/akavel/rsrc v0.10.2 h1:Zxm8V5eI1hW4gGaYsJQUhxpjkENuG91ki8B4zCrvEsw=
-github.com/akavel/rsrc v0.10.2/go.mod h1:uLoCtb9J+EyAqh+26kdrTgmzRBFPGOolLWKpdxkKq+c=
 github.com/atotto/clipboard v0.1.4 h1:EH0zSVneZPSuFR11BlR9YppQTVDbh5+16AmcJi4g1z4=
 github.com/atotto/clipboard v0.1.4/go.mod h1:ZY9tmq7sm5xIbd9bOK4onWV4S6X0u6GY7Vn0Yu86PYI=
 github.com/biessek/golang-ico v0.0.0-20180326222316-d348d9ea4670 h1:FQPKKjDhzG0T4ew6dm6MGrXb4PRAi8ZmTuYuxcF62BM=
@@ -33,12 +31,8 @@ github.com/google/go-querystring v1.1.0 h1:AnCroh3fv4ZBgVIf1Iwtovgjaw/GiKJo8M8yD
 github.com/google/go-querystring v1.1.0/go.mod h1:Kcdr2DB4koayq7X8pmAG4sNG59So17icRSOU623lUBU=
 github.com/hajimehoshi/bitmapfont/v4 v4.1.0-alpha h1:SctB+HjA7Y/7vFznHrf5h61WbX8wRfbBxQEcHbIEyfQ=
 github.com/hajimehoshi/bitmapfont/v4 v4.1.0-alpha/go.mod h1:9KdLJljAPdDiSz6KZK6s3iZl0m1HVvBgU68CYw3U2dk=
-github.com/hajimehoshi/ebiten/v2 v2.9.0-alpha.8.0.20250715144725-96d4c2ba61bf h1:6Pf5Xq+R+sduPd41sPsmh1NLmBxZHh7xUaJV6wcts4o=
-github.com/hajimehoshi/ebiten/v2 v2.9.0-alpha.8.0.20250715144725-96d4c2ba61bf/go.mod h1:7ZF526xo9vzSfEPQshV2HLwdfR4G2xCBR39ATIQ7k9U=
 github.com/hajimehoshi/ebiten/v2 v2.9.0-alpha.9 h1:q5uizKdqDSlqm/KVVXxqVZzzFuHvOyYRZ75Kgexi3K8=
 github.com/hajimehoshi/ebiten/v2 v2.9.0-alpha.9/go.mod h1:7ZF526xo9vzSfEPQshV2HLwdfR4G2xCBR39ATIQ7k9U=
-github.com/hajimehoshi/guigui v0.0.0-20250715150329-190c8b9e0c15 h1:WoWRmAvgMBAfosTsP18I/UwDzUnSaMfAny+1UPHOpKk=
-github.com/hajimehoshi/guigui v0.0.0-20250715150329-190c8b9e0c15/go.mod h1:zRxs774cRCrsTC91xKWXAefs4CuHxJS/DnkHrBil3Zc=
 github.com/hajimehoshi/guigui v0.0.0-20250716114721-21ce0dd99b90 h1:JI10m+gd5CrhqEr59/urpefTzaP748Xw6zOBZ5q/ofE=
 github.com/hajimehoshi/guigui v0.0.0-20250716114721-21ce0dd99b90/go.mod h1:IcMqIA0LI6xk6kaNBSUfGhsO78K4gn6YY8zJwHIS4QY=
 github.com/hajimehoshi/oklab v0.1.0 h1:+ApSswl9LlB+8AYIC9ZaRO/r1emGtTF52YQleB3bW7w=
@@ -50,8 +44,6 @@ github.com/jeandeaual/go-locale v0.0.0-20250612000132-0ef82f21eade/go.mod h1:ZDX
 github.com/jessevdk/go-flags v1.4.0/go.mod h1:4FA24M0QyGHXBuZZK/XkWh8h0e1EYbRYJSGM75WSRxI=
 github.com/jezek/xgb v1.1.1 h1:bE/r8ZZtSv7l9gk6nU0mYx51aXrvnyb44892TwSaqS4=
 github.com/jezek/xgb v1.1.1/go.mod h1:nrhwO0FX/enq75I7Y7G8iN1ubpSGZEiA3v9e9GyRFlk=
-github.com/josephspurrier/goversioninfo v1.5.0 h1:9TJtORoyf4YMoWSOo/cXFN9A/lB3PniJ91OxIH6e7Zg=
-github.com/josephspurrier/goversioninfo v1.5.0/go.mod h1:6MoTvFZ6GKJkzcdLnU5T/RGYUbHQbKpYeNP0AgQLd2o=
 github.com/jsummers/gobmp v0.0.0-20230614200233-a9de23ed2e25 h1:YLvr1eE6cdCqjOe972w/cYF+FjW34v27+9Vo5106B4M=
 github.com/jsummers/gobmp v0.0.0-20230614200233-a9de23ed2e25/go.mod h1:kLgvv7o6UM+0QSf0QjAse3wReFDsb9qbZJdfexWlrQw=
 github.com/kisielk/errcheck v1.9.0 h1:9xt1zI9EBfcYBvdU1nVrzMzzUPUtPKs9bVSIM3TAb3M=

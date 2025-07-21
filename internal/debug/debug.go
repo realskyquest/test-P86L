@@ -24,7 +24,7 @@ package debug
 import (
 	"fmt"
 
-	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
@@ -49,7 +49,9 @@ const (
 	// App errors (1001-1999)
 	ErrUnknown int = iota + 1001
 	ErrBrowserOpen
+
 	ErrLauncherVersionInvalid
+
 	ErrGameVersionInvalid
 	ErrGameNotExist
 	ErrGameRunning
@@ -116,52 +118,90 @@ const (
 )
 
 type Error struct {
-	Err  error
-	Type ErrorType
-	Code int
+	err     error
+	errType ErrorType
+	code    int
 }
 
-type Debug struct {
-	ToastErr *Error
-	PopupErr *Error
-}
-
-func (d *Debug) New(err error, errType ErrorType, code int) *Error {
-	if err != nil {
-		return &Error{
-			Err:  errors.Wrap(err, "Debug"),
-			Type: errType,
-			Code: code,
-		}
-	}
+func New(err error, errType ErrorType, code int) *Error {
 	return &Error{
-		Err:  nil,
-		Type: errType,
-		Code: code,
+		err:     err,
+		errType: errType,
+		code:    code,
 	}
+}
+
+func (e *Error) Error() error {
+	return e.err
+}
+
+func (e *Error) ErrorType() ErrorType {
+	return e.errType
+}
+
+func (e *Error) Code() int {
+	return e.code
+}
+
+func (e *Error) IsType(errType ErrorType) bool {
+	return e.errType == errType
+}
+
+func (e *Error) IsCode(code int) bool {
+	return e.code == code
 }
 
 func (e *Error) String() string {
 	if e != nil {
-		return fmt.Sprintf("Code: ( %d ), Type: ( %s ), Err: ( %s )", e.Code, string(e.Type), e.Err.Error())
+		return fmt.Sprintf("Code: ( %d ), Type: ( %s ), Err: ( %s )", e.code, string(e.errType), e.err.Error())
 	}
 	return ""
 }
 
-func (e *Error) LogErr(place, who string) {
-	log.Error().Int("Code", e.Code).Any("Type", e.Type).Err((e.Err)).Str(place, who).Msg(ErrorManager)
+func (e *Error) LogErr(logStruct, logFunc string) {
+	log.Error().Int("Code", e.code).Any("Type", e.errType).Err((e.err)).Str(logStruct, logFunc).Msg(ErrorManager)
 }
 
-func (e *Error) LogErrStack(place, who string) {
-	log.Error().Stack().Int("Code", e.Code).Any("Type", e.Type).Err((e.Err)).Str(place, who).Msg(ErrorManager)
+func (e *Error) LogErrStack(logStruct, logFunc string) {
+	log.Error().Stack().Int("Code", e.code).Any("Type", e.errType).Err((e.err)).Str(logStruct, logFunc).Msg(ErrorManager)
+}
+
+func (e *Error) LogWarn(logStruct, logFunc string) {
+	log.Warn().Int("Code", e.code).Any("Type", e.errType).Err((e.err)).Str(logStruct, logFunc).Msg(ErrorManager)
+}
+
+func (e *Error) LogWarnStack(logStruct, logFunc string) {
+	log.Warn().Stack().Int("Code", e.code).Any("Type", e.errType).Err((e.err)).Str(logStruct, logFunc).Msg(ErrorManager)
+}
+
+type Debug struct {
+	log   *zerolog.Logger
+	toast *Error
+	popup *Error
+}
+
+func (d *Debug) Log() *zerolog.Logger {
+	return d.log
+}
+
+func (d *Debug) Toast() *Error {
+	return d.toast
+}
+
+func (d *Debug) Popup() *Error {
+	return d.popup
+}
+
+func (d *Debug) SetLog(logger *zerolog.Logger) {
+	d.log = logger
 }
 
 func (d *Debug) SetToast(err *Error) {
-	log.Warn().Stack().Int("Code", err.Code).Any("Type", err.Type).Err(err.Err).Str("Debug", "SetToast").Msg(ErrorManager)
-	d.ToastErr = err
+	err.LogWarnStack("Debug", "SetToast")
+	d.toast = err
 }
 
 func (d *Debug) SetPopup(err *Error) {
-	log.Warn().Stack().Int("Code", err.Code).Any("Type", err.Type).Err(err.Err).Str("Debug", "SetPopup").Msg(ErrorManager)
-	d.PopupErr = err
+	err.LogWarnStack("Debug", "SetPopup")
+	d.popup = err
 }

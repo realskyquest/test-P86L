@@ -73,17 +73,17 @@ tasks:
 
   build:debug:
     cmds:
-      - go build -tags release -ldflags "-s -w" -trimpath -o bin/ cmd/p86l/main.go
+      - go build -ldflags "-s -w -X main.version=release" -trimpath -o bin/ cmd/p86l/main.go
 
   build:windows:
     cmds:
-      - GOOS=windows GOARCH=amd64 go build -tags 'release' -ldflags "-s -w -X main.version={{.VERSION}} -X=runtime.godebugDefault=asyncpreemptoff=1 -H=windowsgui" -trimpath -o bin/Project-86-Launcher-{{.VERSION}}.exe ./cmd/p86l
+      - GOOS=windows GOARCH=amd64 go build -ldflags "-s -w -X main.version={{.VERSION}} -X=runtime.godebugDefault=asyncpreemptoff=1 -H=windowsgui" -trimpath -o bin/Project-86-Launcher-{{.VERSION}}.exe ./cmd/p86l
     generates:
       - bin/Project-86-Launcher-{{.VERSION}}.exe
 
   build:windows-cjk:
     cmds:
-      - GOOS=windows GOARCH=amd64 go build -tags 'release,cjk' -ldflags "-s -w -X main.version={{.VERSION}} -X=runtime.godebugDefault=asyncpreemptoff=1 -H=windowsgui" -trimpath -o bin/Project-86-Launcher-cjk-{{.VERSION}}.exe ./cmd/p86l
+      - GOOS=windows GOARCH=amd64 go build -tags 'cjk' -ldflags "-s -w -X main.version={{.VERSION}} -X=runtime.godebugDefault=asyncpreemptoff=1 -H=windowsgui" -trimpath -o bin/Project-86-Launcher-cjk-{{.VERSION}}.exe ./cmd/p86l
     generates:
       - bin/Project-86-Launcher-cjk-{{.VERSION}}.exe
 

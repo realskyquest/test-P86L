@@ -25,7 +25,7 @@ import (
 	"bytes"
 	_ "embed"
 	"image"
-	"p86l/internal/debug"
+	pd "p86l/internal/debug"
 
 	ico "github.com/biessek/golang-ico"
 )
@@ -33,13 +33,13 @@ import (
 //go:embed p86l.ico
 var p86lIcon []byte
 
-func GetIconImages(appDebug *debug.Debug) ([]image.Image, *debug.Error) {
+func GetIconImages() ([]image.Image, *pd.Error) {
 	var IconImages []image.Image
 
 	reader := bytes.NewReader(p86lIcon)
 	icons, err := ico.DecodeAll(reader)
 	if err != nil {
-		return nil, appDebug.New(err, debug.FSError, debug.ErrFSFileNotExist)
+		return nil, pd.New(err, pd.FSError, pd.ErrFSFileNotExist)
 	}
 	IconImages = append(IconImages, icons...)
 

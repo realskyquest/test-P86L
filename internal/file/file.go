@@ -30,19 +30,18 @@ import (
 	pd "p86l/internal/debug"
 	"path/filepath"
 
-	"github.com/rs/zerolog/log"
 	"github.com/skratchdot/open-golang/open"
 )
 
 // Used to make folders.
-func mkdirAll(appDebug *pd.Debug, path string) *pd.Error {
+func mkdirAll(path string) *pd.Error {
 	_, err := os.Stat(path)
 	if !errors.Is(err, fs.ErrNotExist) && err != nil {
 		return nil
 	}
 	err = os.MkdirAll(path, 0755)
 	if err != nil {
-		return appDebug.New(err, pd.FSError, pd.ErrFSDirNew)
+		return pd.New(err, pd.FSError, pd.ErrFSDirNew)
 	}
 	return nil
 }
@@ -53,17 +52,17 @@ type AppFS struct {
 }
 
 // Make new FS for app.
-func NewFS(appDebug *pd.Debug, extra ...string) (*AppFS, *pd.Error) {
+func NewFS(dm *pd.Debug, extra ...string) (*AppFS, *pd.Error) {
 	// Handles the company path and a path for debugging.
 	var companyPath string
 	if len(extra) == 1 && extra[0] != "" {
-		cPath, err := GetCompanyPath(appDebug, extra[0])
+		cPath, err := GetCompanyPath(dm, extra[0])
 		if err != nil {
 			return nil, err
 		}
 		companyPath = cPath
 	} else {
-		cPath, err := GetCompanyPath(appDebug)
+		cPath, err := GetCompanyPath(dm)
 		if err != nil {
 			return nil, err
 		}
@@ -71,7 +70,7 @@ func NewFS(appDebug *pd.Debug, extra ...string) (*AppFS, *pd.Error) {
 	}
 
 	// Makes the path for company and app.
-	err := mkdirAll(appDebug, filepath.Join(companyPath, configs.AppName))
+	err := mkdirAll(filepath.Join(companyPath, configs.AppName))
 	if err != nil {
 		return nil, err
 	}
@@ -79,7 +78,7 @@ func NewFS(appDebug *pd.Debug, extra ...string) (*AppFS, *pd.Error) {
 	// Creates a virtual filesystem thats in company path, that protects/restricts changes outside of it.
 	root, rErr := os.OpenRoot(companyPath)
 	if rErr != nil {
-		return nil, appDebug.New(rErr, pd.FSError, pd.ErrFSRootInvalid)
+		return nil, pd.New(rErr, pd.FSError, pd.ErrFSRootInvalid)
 	}
 
 	return &AppFS{
@@ -89,68 +88,68 @@ func NewFS(appDebug *pd.Debug, extra ...string) (*AppFS, *pd.Error) {
 }
 
 // Opens the filemanager app with the given path.
-func (a *AppFS) OpenFileManager(appDebug *pd.Debug, path string) *pd.Error {
+func (a *AppFS) OpenFileManager(dm *pd.Debug, path string) *pd.Error {
 	if err := open.Run(path); err != nil {
-		return appDebug.New(err, pd.FSError, pd.ErrFSOpenFileManagerInvalid)
+		return pd.New(err, pd.FSError, pd.ErrFSOpenFileManagerInvalid)
 	}
-	log.Info().Str("Path", path).Str("AppFS", "OpenFileManager").Msg("FileManager")
+	dm.Log().Info().Str("Path", path).Str("AppFS", "OpenFileManager").Msg("FileManager")
 	return nil
 }
 
 // Checks if the directory exists, uses OS
-func (a *AppFS) IsDir(appDebug *pd.Debug, filePath string) *pd.Error {
+func (a *AppFS) IsDir(filePath string) *pd.Error {
 	_, err := os.Stat(filePath)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
-			return appDebug.New(err, pd.FSError, pd.ErrFSRootFileNotExist)
+			return pd.New(err, pd.FSError, pd.ErrFSRootFileNotExist)
 		}
-		return appDebug.New(err, pd.FSError, pd.ErrFSRootFileInvalid)
+		return pd.New(err, pd.FSError, pd.ErrFSRootFileInvalid)
 	}
 	return nil
 }
 
 // same as `IsDir` but its restricted via os.Root
-func (a *AppFS) IsDirR(appDebug *pd.Debug, statFile string) *pd.Error {
+func (a *AppFS) IsDirR(statFile string) *pd.Error {
 	_, err := a.Root.Stat(statFile)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
-			return appDebug.New(err, pd.FSError, pd.ErrFSRootFileNotExist)
+			return pd.New(err, pd.FSError, pd.ErrFSRootFileNotExist)
 		}
-		return appDebug.New(err, pd.FSError, pd.ErrFSRootFileInvalid)
+		return pd.New(err, pd.FSError, pd.ErrFSRootFileInvalid)
 	}
 	return nil
 }
 
 // Saves a file to disk.
-func (a *AppFS) Save(appDebug *pd.Debug, saveFile string, bytes []byte) *pd.Error {
+func (a *AppFS) Save(saveFile string, bytes []byte) *pd.Error {
 	file, err := a.Root.Create(saveFile)
 	if err != nil {
-		return appDebug.New(err, pd.FSError, pd.ErrFSRootFileNew)
+		return pd.New(err, pd.FSError, pd.ErrFSRootFileNew)
 	}
 
 	_, err = file.Write(bytes)
 	if err != nil {
-		return appDebug.New(err, pd.FSError, pd.ErrFSRootFileWrite)
+		return pd.New(err, pd.FSError, pd.ErrFSRootFileWrite)
 	}
 
 	return nil
 }
 
 // Loads binary data from a file in disk.
-func (a *AppFS) Load(appDebug *pd.Debug, loadFile string) ([]byte, *pd.Error) {
-	dErr := a.IsDirR(appDebug, loadFile)
+func (a *AppFS) Load(loadFile string) ([]byte, *pd.Error) {
+	dErr := a.IsDirR(loadFile)
 	if dErr != nil {
 		return nil, dErr
 	}
 
 	file, err := a.Root.Open(loadFile)
 	if err != nil {
-		return nil, appDebug.New(err, pd.FSError, pd.ErrFSRootFileInvalid)
+		return nil, pd.New(err, pd.FSError, pd.ErrFSRootFileInvalid)
 	}
 
 	b, err := io.ReadAll(file)
 	if err != nil {
-		return nil, appDebug.New(err, pd.FSError, pd.ErrFSRootFileRead)
+		return nil, pd.New(err, pd.FSError, pd.ErrFSRootFileRead)
 	}
 
 	return b, nil

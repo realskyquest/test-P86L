@@ -60,23 +60,26 @@ func (p *Play) SetModel(model *p86l.Model) {
 }
 
 func (p *Play) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
+	am := p.model.App()
+	dm := am.Debug()
 	data := p.model.Data()
 
 	if p.err != nil {
-		p86l.GErr = p.err
-		return p.err.Err
+		am.SetError(p.err)
+		return p.err.Error()
 	}
 
-	p.content.SetModel(p.model)
+	p.content.model = p.model
+	p.links.model = p.model
 
-	p.preReleaseText.SetValue(p86l.T("settings.prerelease"))
+	p.preReleaseText.SetValue(am.T("settings.prerelease"))
 	p.preReleaseToggle.SetOnValueChanged(func(value bool) {
 		if value {
-			data.SetUsePreRelease(true)
+			data.SetUsePreRelease(dm, true)
 		} else {
-			data.SetUsePreRelease(false)
+			data.SetUsePreRelease(dm, false)
 		}
-		p.err = data.Save()
+		p.err = data.Save(am)
 	})
 	if data.File().UsePreRelease {
 		p.preReleaseToggle.SetValue(true)
@@ -136,11 +139,10 @@ type playContent struct {
 	sync sync.Once
 }
 
-func (p *playContent) SetModel(model *p86l.Model) {
-	p.model = model
-}
-
 func (p *playContent) handleDownload(context *guigui.Context) {
+	am := p.model.App()
+	dm := am.Debug()
+
 	p.inProgress = true
 
 	context.SetEnabled(&p.installButton, false)
@@ -149,9 +151,9 @@ func (p *playContent) handleDownload(context *guigui.Context) {
 
 	cache := p.model.Cache()
 	if p.model.Data().File().UsePreRelease {
-		pr, rErr := p86l.GetPreRelease()
+		pr, rErr := p86l.GetPreRelease(am)
 		if rErr != nil {
-			p86l.E.SetPopup(p86l.E.New(rErr, pd.NetworkError, pd.ErrNetworkDownloadRequest))
+			dm.SetPopup(pd.New(rErr, pd.NetworkError, pd.ErrNetworkDownloadRequest))
 		}
 		assets := pr.Assets
 
@@ -161,7 +163,7 @@ func (p *playContent) handleDownload(context *guigui.Context) {
 				log.Info().Any("Asset", []string{name, downloadUrl}).Str("Play", "playContent").Msg(pd.NetworkManager)
 				err := p86l.DownloadGame(p.model, name, downloadUrl, true)
 				if err != nil {
-					p86l.E.SetPopup(err)
+					dm.SetPopup(err)
 					break
 				}
 
@@ -177,16 +179,16 @@ func (p *playContent) handleDownload(context *guigui.Context) {
 				log.Info().Any("Asset", []string{name, downloadUrl}).Str("Play", "playContent").Msg(pd.NetworkManager)
 				err := p86l.DownloadGame(p.model, name, downloadUrl, false)
 				if err != nil {
-					p86l.E.SetPopup(err)
+					dm.SetPopup(err)
 					break
 				}
 
-				if err = p.model.Data().SetGameVersion(cache.File().Repo.GetTagName()); err != nil {
-					p86l.E.SetToast(err)
+				if err = p.model.Data().SetGameVersion(dm, cache.File().Repo.GetTagName()); err != nil {
+					dm.SetToast(err)
 					break
 				}
-				if err = p.model.Data().Save(); err != nil {
-					p86l.E.SetToast(err)
+				if err = p.model.Data().Save(am); err != nil {
+					dm.SetToast(err)
 				}
 				break
 			}
@@ -201,21 +203,24 @@ func (p *playContent) handleDownload(context *guigui.Context) {
 }
 
 func (p *playContent) handlePlay() {
+	am := p.model.App()
+	dm := am.Debug()
+	fs := am.FileSystem()
 	data := p.model.Data()
 
 	if p.state != 1 {
 		return
 	}
 
-	if err := p86l.FS.IsDirR(p86l.E, p86l.FS.DirGamePath()); err != nil {
-		p86l.E.SetPopup(p86l.E.New(fmt.Errorf("game not found"), pd.AppError, pd.ErrGameNotExist))
+	if err := fs.IsDirR(fs.DirGamePath()); err != nil {
+		dm.SetPopup(pd.New(fmt.Errorf("game not found"), pd.AppError, pd.ErrGameNotExist))
 		return
 	}
 
 	p.gameMutex.Lock()
 	if p.gameRunning {
 		p.gameMutex.Unlock()
-		p86l.E.SetPopup(p86l.E.New(fmt.Errorf("game is already running."), pd.AppError, pd.ErrGameRunning))
+		dm.SetPopup(pd.New(fmt.Errorf("game is already running."), pd.AppError, pd.ErrGameRunning))
 		return
 	}
 	p.gameRunning = true
@@ -236,9 +241,9 @@ func (p *playContent) handlePlay() {
 			game = "game"
 		}
 
-		cmd := exec.Command(filepath.Join(p86l.FS.CompanyDirPath, "build", game, "Project-86.exe"))
+		cmd := exec.Command(filepath.Join(fs.CompanyDirPath, "build", game, "Project-86.exe"))
 		if err := cmd.Start(); err != nil {
-			p86l.E.SetPopup(p86l.E.New(err, pd.AppError, pd.ErrGameNotExist))
+			dm.SetPopup(pd.New(err, pd.AppError, pd.ErrGameNotExist))
 			return
 		}
 
@@ -247,13 +252,15 @@ func (p *playContent) handlePlay() {
 
 		if err := cmd.Wait(); err != nil {
 			if _, ok := err.(*exec.ExitError); !ok {
-				p86l.E.SetPopup(p86l.E.New(err, pd.AppError, pd.ErrGameNotExist))
+				dm.SetPopup(pd.New(err, pd.AppError, pd.ErrGameNotExist))
 			}
 		}
 	}()
 }
 
 func (p *playContent) handleUpdate(context *guigui.Context) {
+	am := p.model.App()
+	dm := am.Debug()
 	data := p.model.Data()
 	cache := p.model.Cache()
 
@@ -263,18 +270,21 @@ func (p *playContent) handleUpdate(context *guigui.Context) {
 
 	value, err := p86l.CheckNewerVersion(data.File().GameVersion, cache.File().Repo.GetTagName())
 	if err != nil {
-		p86l.E.SetPopup(err)
+		dm.SetPopup(err)
 		return
 	}
 	if value {
 		log.Info().Str("Game", "New version found").Str("Play", "playContent").Msg(pd.NetworkManager)
 		go p.handleDownload(context)
 	} else {
-		p86l.E.SetPopup(p86l.E.New(fmt.Errorf("newer version not found"), pd.AppError, pd.ErrGameVersionInvalid))
+		dm.SetPopup(pd.New(fmt.Errorf("newer version not found"), pd.AppError, pd.ErrGameVersionInvalid))
 	}
 }
 
 func (p *playContent) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
+	am := p.model.App()
+	dm := am.Debug()
+	fs := am.FileSystem()
 	data := p.model.Data()
 	cache := p.model.Cache()
 
@@ -282,15 +292,15 @@ func (p *playContent) Build(context *guigui.Context, appender *guigui.ChildWidge
 		context.SetEnabled(&p.launcherButton, false)
 		go func() {
 			ctx := gctx.Background()
-			release, _, rErr := p86l.GithubClient.Repositories.GetLatestRelease(ctx, configs.CompanyName, configs.AppName)
+			release, _, rErr := am.GithubClient().Repositories.GetLatestRelease(ctx, configs.CompanyName, configs.AppName)
 			if rErr != nil {
 				log.Error().Any("Launcher release", rErr).Msg(pd.NetworkManager)
 				return
 			}
-			if p.model.Version() != nil {
-				value, err := p86l.CheckNewerVersion(p86l.TheDebugMode.Version, release.GetTagName())
+			if am.Version() != nil {
+				value, err := p86l.CheckNewerVersion(am.PlainVersion(), release.GetTagName())
 				if err != nil {
-					p86l.E.SetToast(err)
+					dm.SetToast(err)
 					return
 				}
 				log.Info().Str("playContent", "Build").Msg("Launcher Updater")
@@ -311,21 +321,21 @@ func (p *playContent) Build(context *guigui.Context, appender *guigui.ChildWidge
 	p.updateButton.SetOnDown(func() {
 		p.handleUpdate(context)
 	})
-	p.launcherButton.SetOnDown(func(){
-		
+	p.launcherButton.SetOnDown(func() {
+
 	})
 
 	if data.File().UsePreRelease {
-		p.installButton.SetText(p86l.T("play.prerelease"))
+		p.installButton.SetText(am.T("play.prerelease"))
 	} else {
-		p.installButton.SetText(p86l.T("play.install"))
+		p.installButton.SetText(am.T("play.install"))
 	}
-	p.playButton.SetText(p86l.T("play.play"))
-	p.updateButton.SetText(p86l.T("play.update"))
-	p.launcherButton.SetText(p86l.T("play.launcher"))
+	p.playButton.SetText(am.T("play.play"))
+	p.updateButton.SetText(am.T("play.update"))
+	p.launcherButton.SetText(am.T("play.launcher"))
 
 	if data.File().UsePreRelease {
-		if err := p86l.FS.IsDirR(p86l.E, filepath.Join(p86l.FS.DirBuildPath(), "pregame", "Project-86.exe")); err == nil {
+		if err := fs.IsDirR(filepath.Join(fs.DirBuildPath(), "pregame", "Project-86.exe")); err == nil {
 			// play.
 			p.state = 1
 		} else {
@@ -333,7 +343,7 @@ func (p *playContent) Build(context *guigui.Context, appender *guigui.ChildWidge
 			p.state = 0
 		}
 	} else {
-		if err := p86l.FS.IsDirR(p86l.E, filepath.Join(p86l.FS.DirGamePath(), "Project-86.exe")); err == nil {
+		if err := fs.IsDirR(filepath.Join(fs.DirGamePath(), "Project-86.exe")); err == nil {
 			// play.
 			p.state = 1
 		} else {
@@ -357,7 +367,7 @@ func (p *playContent) Build(context *guigui.Context, appender *guigui.ChildWidge
 		if cache.IsValid() {
 			value, err := p86l.CheckNewerVersion(data.File().GameVersion, cache.File().Repo.GetTagName())
 			if err != nil {
-				p86l.E.SetToast(err)
+				dm.SetToast(err)
 			}
 			if value {
 				context.SetEnabled(&p.updateButton, true)
@@ -409,17 +419,22 @@ type playLinks struct {
 	githubButton  basicwidget.Button
 	discordButton basicwidget.Button
 	patreonButton basicwidget.Button
+
+	model *p86l.Model
 }
 
 func (p *playLinks) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
-	img1, err1 := assets.TheImageCache.Get(p86l.E, "ie")
-	img2, err2 := assets.TheImageCache.Get(p86l.E, "github")
-	img3, err3 := assets.TheImageCache.Get(p86l.E, "discord")
-	img4, err4 := assets.TheImageCache.Get(p86l.E, "patreon")
+	am := p.model.App()
+	dm := am.Debug()
+
+	img1, err1 := assets.TheImageCache.Get("ie")
+	img2, err2 := assets.TheImageCache.Get("github")
+	img3, err3 := assets.TheImageCache.Get("discord")
+	img4, err4 := assets.TheImageCache.Get("patreon")
 
 	if err := cmp.Or(err1, err2, err3, err4); err != nil {
-		p86l.GErr = err
-		return err.Err
+		am.SetError(err)
+		return err.Error()
 	}
 
 	p.websiteButton.SetIcon(img1)
@@ -427,22 +442,22 @@ func (p *playLinks) Build(context *guigui.Context, appender *guigui.ChildWidgetA
 	p.discordButton.SetIcon(img3)
 	p.patreonButton.SetIcon(img4)
 
-	p.websiteButton.SetText(p86l.T("play.website"))
-	p.githubButton.SetText(p86l.T("play.github"))
-	p.discordButton.SetText(p86l.T("play.discord"))
-	p.patreonButton.SetText(p86l.T("play.patreon"))
+	p.websiteButton.SetText(am.T("play.website"))
+	p.githubButton.SetText(am.T("play.github"))
+	p.discordButton.SetText(am.T("play.discord"))
+	p.patreonButton.SetText(am.T("play.patreon"))
 
 	p.websiteButton.SetOnDown(func() {
-		go p86l.OpenBrowser(configs.Website)
+		go p86l.OpenBrowser(dm, configs.Website)
 	})
 	p.githubButton.SetOnDown(func() {
-		go p86l.OpenBrowser(configs.Github)
+		go p86l.OpenBrowser(dm, configs.Github)
 	})
 	p.discordButton.SetOnDown(func() {
-		go p86l.OpenBrowser(configs.Discord)
+		go p86l.OpenBrowser(dm, configs.Discord)
 	})
 	p.patreonButton.SetOnDown(func() {
-		go p86l.OpenBrowser(configs.Patreon)
+		go p86l.OpenBrowser(dm, configs.Patreon)
 	})
 
 	var gl layout.GridLayout

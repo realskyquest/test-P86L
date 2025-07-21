@@ -25,21 +25,21 @@ import (
 	"fmt"
 	"os"
 	"p86l/configs"
-	"p86l/internal/debug"
+	pd "p86l/internal/debug"
 	"path/filepath"
 )
 
-func GetCompanyPath(appDebug *debug.Debug, extra ...string) (string, *debug.Error) {
+func GetCompanyPath(dm *pd.Debug, extra ...string) (string, *pd.Error) {
 	appData := os.Getenv("APPDATA")
 	if appData == "" {
-		return "", appDebug.New(fmt.Errorf("APPDATA not set"), debug.FSError, debug.ErrFSDirInvalid)
+		return "", pd.New(fmt.Errorf("APPDATA not set"), pd.FSError, pd.ErrFSDirInvalid)
 	}
 	dataPath := filepath.Join(appData, configs.CompanyName)
 	// Used for testing only!
 	if len(extra) == 1 && extra[0] != "" {
 		dataPath = fmt.Sprintf("%s_%s", dataPath, extra[0])
 	}
-	if dErr := mkdirAll(appDebug, dataPath); dErr != nil {
+	if dErr := mkdirAll(dm, dataPath); dErr != nil {
 		return "", dErr
 	}
 	return dataPath, nil

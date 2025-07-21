@@ -28,7 +28,7 @@ import (
 	"image/jpeg"
 	"image/png"
 	"io/fs"
-	"p86l/internal/debug"
+	pd "p86l/internal/debug"
 
 	"github.com/hajimehoshi/ebiten/v2"
 )
@@ -49,7 +49,7 @@ type imageCache struct {
 
 var TheImageCache = &imageCache{}
 
-func (i *imageCache) Get(appDebug *debug.Debug, name string) (*ebiten.Image, *debug.Error) {
+func (i *imageCache) Get(name string) (*ebiten.Image, *pd.Error) {
 	key := imageCacheKey{name: name}
 
 	// Check if image is already cached
@@ -73,13 +73,13 @@ func (i *imageCache) Get(appDebug *debug.Debug, name string) (*ebiten.Image, *de
 		}()
 		pImg, err = jpeg.Decode(f)
 		if err != nil {
-			return nil, appDebug.New(fmt.Errorf("failed to decode JPG: %w", err), debug.FSError, debug.ErrFSFileNotExist)
+			return nil, pd.New(fmt.Errorf("failed to decode JPG: %w", err), pd.FSError, pd.ErrFSFileNotExist)
 		}
 	} else {
 		// If JPG fails, try PNG
 		f, err = pngImages.Open(name + ".png")
 		if err != nil {
-			return nil, appDebug.New(fmt.Errorf("image not found as JPG or PNG: %w", err), debug.FSError, debug.ErrFSFileNotExist)
+			return nil, pd.New(fmt.Errorf("image not found as JPG or PNG: %w", err), pd.FSError, pd.ErrFSFileNotExist)
 		}
 		defer func() {
 			if err := f.Close(); err != nil {
@@ -88,7 +88,7 @@ func (i *imageCache) Get(appDebug *debug.Debug, name string) (*ebiten.Image, *de
 		}()
 		pImg, err = png.Decode(f)
 		if err != nil {
-			return nil, appDebug.New(fmt.Errorf("failed to decode PNG: %w", err), debug.FSError, debug.ErrFSFileNotExist)
+			return nil, pd.New(fmt.Errorf("failed to decode PNG: %w", err), pd.FSError, pd.ErrFSFileNotExist)
 		}
 	}
 

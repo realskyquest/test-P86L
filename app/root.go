@@ -30,7 +30,6 @@ import (
 	p86lLocale "p86l/assets/locale"
 	"p86l/configs"
 	pd "p86l/internal/debug"
-	"p86l/internal/file"
 	"runtime"
 	"slices"
 	"sync"
@@ -43,7 +42,6 @@ import (
 	"github.com/hajimehoshi/guigui/basicwidget"
 	"github.com/hajimehoshi/guigui/layout"
 	i18n "github.com/nicksnyder/go-i18n/v2/i18n"
-	"github.com/rs/zerolog/log"
 )
 
 type breakWidget struct {
@@ -91,19 +89,36 @@ type Root struct {
 	err  *pd.Error
 }
 
-func (r *Root) runApp() *pd.Error {
-	iconImages, err1 := assets.GetIconImages(p86l.E)
-	afs, err2 := file.NewFS(p86l.E)
-	bundle, err3 := p86lLocale.GetLocales(p86l.E, language.English)
+func NewRoot(version string) (*Root, *pd.Error) {
+	r := &Root{}
+	am := r.model.App()
 
-	if err := cmp.Or(err1, err2, err3); err != nil {
+	am.SetPlainVersion(version)
+	err := am.SetFileSystem()
+	if err != nil {
+		return nil, err
+	}
+
+	return r, nil
+}
+
+func (r *Root) Model() *p86l.Model {
+	return &r.model
+}
+
+func (r *Root) runApp() *pd.Error {
+	am := r.model.App()
+
+	iconImages, err1 := assets.GetIconImages()
+	bundle, err2 := p86lLocale.GetLocales(language.English)
+
+	if err := cmp.Or(err1, err2); err != nil {
 		return err
 	}
 
 	ebiten.SetWindowIcon(iconImages)
-	p86l.FS = afs
-	p86l.LBundle = bundle
-	p86l.LLocalizer = i18n.NewLocalizer(bundle, "en")
+	am.SetI18nBundle(bundle)
+	am.SetI18nLocalizer(i18n.NewLocalizer(bundle, "en"))
 
 	return nil
 }
@@ -118,34 +133,38 @@ func (r *Root) updateFontFaceSources(context *guigui.Context) {
 }
 
 func (r *Root) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
+	am := r.model.App()
+	dm := am.Debug()
+	log := dm.Log()
 	data := r.model.Data()
 
 	r.sync.Do(func() {
+		var gpuInfo ebiten.DebugInfo
+		ebiten.ReadDebugInfo(&gpuInfo)
+
 		err1 := r.runApp()
-		err2 := p86l.LoadB(context, &r.model, "data")
-		err3 := p86l.LoadB(context, &r.model, "cache")
+		err2 := p86l.LoadB(am, context, &r.model, "data")
+		err3 := p86l.LoadB(am, context, &r.model, "cache")
 
 		if err := cmp.Or(err1, err2, err3); err != nil {
 			r.err = err
 			return
 		}
 
-		if launcherVersion := p86l.TheDebugMode.Version; launcherVersion != "dev" {
-			err4 := r.model.SetVersion(launcherVersion)
+		if launcherVersion := am.PlainVersion(); launcherVersion != "dev" {
+			err4 := am.SetVersion(launcherVersion)
 			if err4 != nil {
-				err4.LogErr("Root.sync", "Build")
+				err4.LogWarn("Root.sync", "Build")
 			}
 		}
 
-		r.model.Cache().Translate(r.model.Data().File().Locale)
-		var gpuInfo ebiten.DebugInfo
-		ebiten.ReadDebugInfo(&gpuInfo)
-
 		log.Info().Msg("..:: GuiGui GUI Framework Alpha ::..")
-		log.Info().Str("Version", p86l.TheDebugMode.Version).Msg("P86L - Project 86 Launcher")
+		log.Info().Str("Version", am.PlainVersion()).Msg("P86L - Project 86 Launcher")
 		log.Info().Str("Detected OS", runtime.GOOS).Msg("Operating System")
 		log.Info().Str("Graphics API", gpuInfo.GraphicsLibrary.String()).Msg("GPU")
-		log.Warn().Str("LICENSE", p86l.ALicense).Msg("README")
+		log.Warn().Str("LICENSE", am.License()).Msg("README")
+
+		r.model.Cache().SetChangelog(am, data.File().Locale)
 
 		if data.File().WindowX > 0 || data.File().WindowY > 0 {
 			ebiten.SetWindowPosition(data.File().WindowX, data.File().WindowY)
@@ -159,22 +178,25 @@ func (r *Root) Build(context *guigui.Context, appender *guigui.ChildWidgetAppend
 	})
 
 	if r.err != nil {
-		p86l.GErr = r.err
-		return r.err.Err
+		am.SetError(r.err)
+		return r.err.Error()
 	}
 	r.updateFontFaceSources(context)
 
 	if ebiten.IsWindowBeingClosed() {
 		log.Info().Msg("P86L Closing")
-		r.err = data.Save()
+		r.err = data.Save(am)
 	}
 
-	r.background.SetModel(&r.model)
+	r.popupContent.model = &r.model
+	r.background.model = &r.model
+
 	r.sidebar.SetModel(&r.model)
 	r.home.SetModel(&r.model)
 	r.play.SetModel(&r.model)
 	r.changelog.SetModel(&r.model)
 	r.settings.SetModel(&r.model)
+	r.about.SetModel(&r.model)
 
 	u := basicwidget.UnitSize(context)
 	gl := layout.GridLayout{
@@ -206,10 +228,10 @@ func (r *Root) Build(context *guigui.Context, appender *guigui.ChildWidgetAppend
 	// -- popup --
 
 	r.popup.SetOnClosed(func(reason basicwidget.PopupClosedReason) {
-		p86l.E.PopupErr = nil
+		dm.SetPopup(nil)
 		r.popupDebounce = false
 	})
-	if p86l.E.PopupErr != nil && !r.popupDebounce {
+	if dm.Popup() != nil && !r.popupDebounce {
 		r.popupDebounce = true
 		r.popup.Open(context)
 	}
@@ -237,6 +259,9 @@ func (r *Root) Build(context *guigui.Context, appender *guigui.ChildWidgetAppend
 }
 
 func (r *Root) Tick(context *guigui.Context) error {
+	am := r.model.App()
+	dm := am.Debug()
+	log := dm.Log()
 	data := r.model.Data()
 	cache := r.model.Cache()
 
@@ -257,15 +282,15 @@ func (r *Root) Tick(context *guigui.Context) error {
 			log.Info().Str("Cache", "cache is invalid").Str("Root", "Tick").Msg(pd.NetworkManager)
 			go func() {
 				ctx := gctx.Background()
-				release, _, rErr := p86l.GithubClient.Repositories.GetLatestRelease(ctx, configs.RepoOwner, configs.RepoName)
+				release, _, rErr := am.GithubClient().Repositories.GetLatestRelease(ctx, configs.RepoOwner, configs.RepoName)
 				if rErr != nil {
 					log.Error().Any("Game release", rErr).Msg(pd.NetworkManager)
 					cache.SetProgress(false)
 					return
 				}
-				err := cache.SetRepo(release, r.model.Data().File().Locale)
+				err := cache.SetRepo(am, release, r.model.Data().File().Locale)
 				if err != nil {
-					p86l.E.SetToast(err)
+					dm.SetToast(err)
 				}
 				cache.SetProgress(false)
 			}()
@@ -288,10 +313,6 @@ type rootBackground struct {
 	err *pd.Error
 }
 
-func (r *rootBackground) SetModel(model *p86l.Model) {
-	r.model = model
-}
-
 func (r *rootBackground) SetSidebar(sidebar *Sidebar) {
 	r.sidebar = sidebar
 }
@@ -301,12 +322,15 @@ func (r *rootBackground) SetBgBounds(bounds image.Rectangle) {
 }
 
 func (r *rootBackground) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
-	img, err := assets.TheImageCache.Get(p86l.E, "banner")
+	// TODO: Fix background image not covering the whole window sometimes.
+	am := r.model.App()
+
+	img, err := assets.TheImageCache.Get("banner")
 	r.err = err
 
 	if r.err != nil {
-		p86l.GErr = r.err
-		return r.err.Err
+		am.SetError(r.err)
+		return r.err.Error()
 	}
 
 	r.bgImage.SetImage(img)
@@ -350,12 +374,15 @@ type rootPopupContent struct {
 
 	titleText   basicwidget.Text
 	closeButton basicwidget.Button
+
+	model *p86l.Model
 }
 
 func (r *rootPopupContent) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
+	dm := r.model.App().Debug()
 	u := basicwidget.UnitSize(context)
 
-	r.titleText.SetValue(p86l.E.PopupErr.String())
+	r.titleText.SetValue(dm.Popup().String())
 	r.titleText.SetAutoWrap(true)
 	r.titleText.SetBold(true)
 	r.titleText.SetSelectable(true)

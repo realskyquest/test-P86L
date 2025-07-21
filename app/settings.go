@@ -41,7 +41,7 @@ type Settings struct {
 	reset settingsReset
 
 	model *p86l.Model
-	dErr  *pd.Error
+	err   *pd.Error
 }
 
 func (s *Settings) SetModel(model *p86l.Model) {
@@ -49,13 +49,16 @@ func (s *Settings) SetModel(model *p86l.Model) {
 }
 
 func (s *Settings) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
-	if s.dErr != nil {
-		p86l.GErr = s.dErr
-		return s.dErr.Err
+	am := s.model.App()
+
+	if s.err != nil {
+		am.SetError(s.err)
+		return s.err.Error()
 	}
 
-	s.data.SetModel(s.model)
-	s.reset.SetModel(s.model)
+	s.data.model = s.model
+	s.open.model = s.model
+	s.reset.model = s.model
 
 	u := basicwidget.UnitSize(context)
 	gl := layout.GridLayout{
@@ -89,17 +92,15 @@ type settingsData struct {
 	err *pd.Error
 }
 
-func (s *settingsData) SetModel(model *p86l.Model) {
-	s.model = model
-}
-
 func (s *settingsData) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
+	am := s.model.App()
+	dm := am.Debug()
 	data := s.model.Data()
 	cache := s.model.Cache()
 
-	s.localeText.SetValue(p86l.T("settings.locale"))
-	s.colorModeText.SetValue(p86l.T("settings.colormode"))
-	s.scaleText.SetValue(p86l.T("settings.appscale"))
+	s.localeText.SetValue(am.T("settings.locale"))
+	s.colorModeText.SetValue(am.T("settings.colormode"))
+	s.scaleText.SetValue(am.T("settings.appscale"))
 
 	s.localeDropdownList.SetItems(localeItems)
 	s.localeDropdownList.SetOnItemSelected(func(index int) {
@@ -109,14 +110,14 @@ func (s *settingsData) Build(context *guigui.Context, appender *guigui.ChildWidg
 			return
 		}
 		if item.ID == language.English {
-			data.SetLocale(context, language.English)
+			data.SetLocale(am, context, language.English)
 			context.SetAppLocales(nil)
-			s.err = data.Save()
+			s.err = data.Save(am)
 			return
 		}
-		data.SetLocale(context, item.ID)
-		cache.Translate(item.ID.String())
-		s.err = data.Save()
+		data.SetLocale(am, context, item.ID)
+		cache.SetChangelog(am, item.ID.String())
+		s.err = data.Save(am)
 	})
 	if !s.localeDropdownList.IsPopupOpen() {
 		if locales := context.AppendAppLocales(nil); len(locales) > 0 {
@@ -128,11 +129,11 @@ func (s *settingsData) Build(context *guigui.Context, appender *guigui.ChildWidg
 
 	s.colorModeToggle.SetOnValueChanged(func(value bool) {
 		if value {
-			data.SetColorMode(context, guigui.ColorModeDark)
+			data.SetColorMode(dm, context, guigui.ColorModeDark)
 		} else {
-			data.SetColorMode(context, guigui.ColorModeLight)
+			data.SetColorMode(dm, context, guigui.ColorModeLight)
 		}
-		s.err = data.Save()
+		s.err = data.Save(am)
 	})
 	switch context.ColorMode() {
 	case guigui.ColorModeLight:
@@ -168,17 +169,17 @@ func (s *settingsData) Build(context *guigui.Context, appender *guigui.ChildWidg
 	s.scaleSegmentedControl.SetOnItemSelected(func(index int) {
 		item, ok := s.scaleSegmentedControl.ItemByIndex(index)
 		if !ok {
-			data.SetAppScale(context, 2)
+			data.SetAppScale(dm, context, 2)
 			return
 		}
-		data.SetAppScale(context, item.ID)
-		s.err = data.Save()
+		data.SetAppScale(dm, context, item.ID)
+		s.err = data.Save(am)
 	})
 	s.scaleSegmentedControl.SelectItemByID(data.File().AppScale)
 
 	if s.err != nil {
-		p86l.GErr = s.err
-		return s.err.Err
+		am.SetError(s.err)
+		return s.err.Error()
 	}
 
 	s.form.SetItems([]basicwidget.FormItem{
@@ -208,22 +209,28 @@ type settingsOpen struct {
 	companyFolderButton  basicwidget.Button
 	launcherFolderText   basicwidget.Text
 	launcherFolderButton basicwidget.Button
+
+	model *p86l.Model
 }
 
 func (s *settingsOpen) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
-	s.companyFolderText.SetValue(p86l.T("settings.company"))
-	s.companyFolderButton.SetText(p86l.T("common.open"))
-	s.launcherFolderText.SetValue(p86l.T("settings.launcher"))
-	s.launcherFolderButton.SetText(p86l.T("common.open"))
+	am := s.model.App()
+	dm := am.Debug()
+	fs := am.FileSystem()
+
+	s.companyFolderText.SetValue(am.T("settings.company"))
+	s.companyFolderButton.SetText(am.T("common.open"))
+	s.launcherFolderText.SetValue(am.T("settings.launcher"))
+	s.launcherFolderButton.SetText(am.T("common.open"))
 
 	s.companyFolderButton.SetOnDown(func() {
 		go func() {
-			p86l.FS.OpenFileManager(p86l.E, p86l.FS.CompanyDirPath)
+			fs.OpenFileManager(dm, fs.CompanyDirPath)
 		}()
 	})
 	s.launcherFolderButton.SetOnDown(func() {
 		go func() {
-			p86l.FS.OpenFileManager(p86l.E, filepath.Join(p86l.FS.CompanyDirPath, configs.AppName))
+			fs.OpenFileManager(dm, filepath.Join(fs.CompanyDirPath, configs.AppName))
 		}()
 	})
 
@@ -252,23 +259,21 @@ type settingsReset struct {
 	model *p86l.Model
 }
 
-func (s *settingsReset) SetModel(model *p86l.Model) {
-	s.model = model
-}
-
 func (s *settingsReset) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
+	am := s.model.App()
+	dm := am.Debug()
 	data := s.model.Data()
 	cache := s.model.Cache()
 
-	s.dataButton.SetText(p86l.T("settings.resetdata"))
-	s.cacheButton.SetText(p86l.T("settings.resetcache"))
+	s.dataButton.SetText(am.T("settings.resetdata"))
+	s.cacheButton.SetText(am.T("settings.resetcache"))
 
 	s.dataButton.SetOnDown(func() {
 		d := p86l.NewData()
-		data.SetFile(d)
-		err := p86l.LoadB(context, s.model, "data")
+		data.SetFile(am, d)
+		err := p86l.LoadB(am, context, s.model, "data")
 		if err != nil {
-			p86l.E.SetPopup(err)
+			dm.SetPopup(err)
 		}
 	})
 	s.cacheButton.SetOnDown(func() {

@@ -25,7 +25,7 @@ import (
 	"embed"
 	"fmt"
 	"io/fs"
-	"p86l/internal/debug"
+	pd "p86l/internal/debug"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -36,13 +36,13 @@ import (
 //go:embed locale.*.toml
 var localeFS embed.FS
 
-func GetLocales(appDebug *debug.Debug, locale language.Tag) (*i18n.Bundle, *debug.Error) {
+func GetLocales(locale language.Tag) (*i18n.Bundle, *pd.Error) {
 	bundle := i18n.NewBundle(locale)
 	bundle.RegisterUnmarshalFunc("toml", toml.Unmarshal)
 
 	entries, err := fs.ReadDir(localeFS, ".")
 	if err != nil {
-		return nil, appDebug.New(err, debug.FSError, debug.ErrFSFileNotExist)
+		return nil, pd.New(err, pd.FSError, pd.ErrFSFileNotExist)
 	}
 
 	for _, entry := range entries {
@@ -51,7 +51,7 @@ func GetLocales(appDebug *debug.Debug, locale language.Tag) (*i18n.Bundle, *debu
 			if localeTag != "" {
 				_, err := bundle.LoadMessageFileFS(localeFS, entry.Name())
 				if err != nil {
-					return nil, appDebug.New(fmt.Errorf("%s: %v", entry.Name(), err), debug.FSError, debug.ErrFSFileNotExist)
+					return nil, pd.New(fmt.Errorf("%s: %v", entry.Name(), err), pd.FSError, pd.ErrFSFileNotExist)
 				}
 			}
 		}

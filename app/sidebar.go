@@ -75,29 +75,30 @@ func (s *sidebarContent) SetModel(model *p86l.Model) {
 }
 
 func (s *sidebarContent) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
-	s.stats.SetModel(s.model)
+	am := s.model.App()
 
+	s.stats.model = s.model
 	s.list.SetStyle(basicwidget.ListStyleSidebar)
 
 	items := []basicwidget.ListItem[string]{
 		{
-			Text: p86l.T("home.title"),
+			Text: am.T("home.title"),
 			ID:   "home",
 		},
 		{
-			Text: p86l.T("play.title"),
+			Text: am.T("play.title"),
 			ID:   "play",
 		},
 		{
-			Text: p86l.T("changelog.title"),
+			Text: am.T("changelog.title"),
 			ID:   "changelog",
 		},
 		{
-			Text: p86l.T("settings.title"),
+			Text: am.T("settings.title"),
 			ID:   "settings",
 		},
 		{
-			Text: p86l.T("about.title"),
+			Text: am.T("about.title"),
 			ID:   "about",
 		},
 	}
@@ -207,26 +208,25 @@ type sidebarStats struct {
 	model *p86l.Model
 }
 
-func githubRateLimit(ctx gctx.Context) *github.RateLimits {
-	limits, _, err := p86l.GithubClient.RateLimit.Get(ctx)
+func githubRateLimit(am *p86l.AppModel, ctx gctx.Context) *github.RateLimits {
+	limits, _, err := am.GithubClient().RateLimit.Get(ctx)
 	if err != nil {
 		return nil
 	}
 	return limits
 }
 
-func (s *sidebarStats) SetModel(model *p86l.Model) {
-	s.model = model
-}
-
 func (s *sidebarStats) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
+	am := s.model.App()
+	dm := am.Debug()
+
 	s.progressTextInput.SetValue(s.model.Progress())
 	s.progressTextInput.SetMultiline(true)
 	s.progressTextInput.SetAutoWrap(true)
 	s.progressTextInput.SetEditable(false)
 
-	if p86l.E.ToastErr != nil {
-		s.toastTextInput.SetValue(p86l.E.ToastErr.String())
+	if toast := dm.Toast(); toast != nil {
+		s.toastTextInput.SetValue(toast.String())
 	} else {
 		s.toastTextInput.SetValue("")
 	}
@@ -234,7 +234,7 @@ func (s *sidebarStats) Build(context *guigui.Context, appender *guigui.ChildWidg
 	s.toastTextInput.SetAutoWrap(true)
 	s.toastTextInput.SetEditable(false)
 
-	s.versionText.SetValue(p86l.TheDebugMode.Version)
+	s.versionText.SetValue(am.PlainVersion())
 	s.versionText.SetHorizontalAlign(basicwidget.HorizontalAlignCenter)
 	s.versionText.SetVerticalAlign(basicwidget.VerticalAlignMiddle)
 
@@ -273,7 +273,7 @@ func (s *sidebarStats) Tick(context *guigui.Context) error {
 
 		go func() {
 			ctx, cancel := gctx.WithTimeout(gctx.Background(), time.Second*5)
-			limits := githubRateLimit(ctx)
+			limits := githubRateLimit(s.model.App(), ctx)
 			defer cancel()
 
 			if limits != nil {

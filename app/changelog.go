@@ -45,16 +45,19 @@ func (c *Changelog) SetModel(model *p86l.Model) {
 }
 
 func (c *Changelog) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
+	am := c.model.App()
+	dm := am.Debug()
+
 	c.text.SetHorizontalAlign(basicwidget.HorizontalAlignCenter)
 	c.text.SetVerticalAlign(basicwidget.VerticalAlignMiddle)
 	c.text.SetAutoWrap(true)
 
 	if cache := c.model.Cache(); cache.IsValid() {
 		if locale := c.model.Data().File().Locale; locale != "en" {
-			if cache.TranslatedBody == "" {
+			if changelog := cache.Changelog(); changelog == "" {
 				c.text.SetValue("...")
 			} else {
-				c.text.SetValue(cache.TranslatedBody)
+				c.text.SetValue(changelog)
 			}
 		} else {
 			c.text.SetValue(cache.File().Repo.GetBody())
@@ -69,10 +72,10 @@ func (c *Changelog) Build(context *guigui.Context, appender *guigui.ChildWidgetA
 
 	c.viewButton.SetOnDown(func() {
 		if value := c.viewText.Value(); value != "?" {
-			go p86l.OpenBrowser(value)
+			go p86l.OpenBrowser(dm, value)
 		}
 	})
-	c.viewButton.SetText(p86l.T("changelog.view"))
+	c.viewButton.SetText(am.T("changelog.view"))
 
 	c.form.SetItems([]basicwidget.FormItem{
 		{

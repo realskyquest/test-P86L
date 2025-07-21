@@ -58,7 +58,7 @@ func TestSaveFiles(t *testing.T) {
 		t.Fatalf("%#v", err)
 	}
 
-	err = fs.Save(e, fs.FileDataPath(), b)
+	err = fs.Save(fs.FileDataPath(), b)
 	if err != nil {
 		t.Fatalf("%#v", err)
 	}
@@ -67,7 +67,7 @@ func TestSaveFiles(t *testing.T) {
 func TestLoadFiles(t *testing.T) {
 	e, fs := setup(t)
 
-	b, err := fs.Load(e, fs.FileDataPath())
+	b, err := fs.Load(fs.FileDataPath())
 	if err != nil {
 		t.Fatalf("%#v", err)
 	}
@@ -81,9 +81,9 @@ func TestLoadFiles(t *testing.T) {
 }
 
 func TestStatFile(t *testing.T) {
-	e, fs := setup(t)
-	if err := fs.IsDirR(e, fs.FileDataPath()); err != nil {
+	_, fs := setup(t)
+
+	if err := fs.IsDirR(fs.FileDataPath()); err != nil {
 		t.Fatalf("%#v", err)
 	}
 }
-

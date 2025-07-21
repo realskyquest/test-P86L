@@ -45,7 +45,7 @@ func (h *Home) SetModel(model *p86l.Model) {
 }
 
 func (h *Home) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
-	h.stats.SetModel(h.model)
+	h.stats.model = h.model
 	context.SetOpacity(&h.background, 0.9)
 
 	var gl layout.GridLayout
@@ -98,23 +98,20 @@ type homeStats struct {
 	model *p86l.Model
 }
 
-func (h *homeStats) SetModel(model *p86l.Model) {
-	h.model = model
-}
-
 func (h *homeStats) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
-	img, err := assets.TheImageCache.Get(p86l.E, "p86l")
-	h.image.SetImage(img)
-
-	if err != nil {
-		p86l.GErr = err
-		return err.Err
-	}
-
+	am := h.model.App()
 	cache := h.model.Cache()
 	cacheAssets := cache.File().Repo.Assets
 
-	h.welcomeText.SetValue(p86l.T("home.welcome"))
+	img, err := assets.TheImageCache.Get("p86l")
+
+	if err != nil {
+		am.SetError(err)
+		return err.Error()
+	}
+
+	h.image.SetImage(img)
+	h.welcomeText.SetValue(am.T("home.welcome"))
 	h.welcomeStatText.SetValue(p86l.GetUsername())
 
 	h.form1.SetItems([]basicwidget.FormItem{
@@ -126,8 +123,8 @@ func (h *homeStats) Build(context *guigui.Context, appender *guigui.ChildWidgetA
 		},
 	})
 
-	h.downloadsText.SetValue(p86l.T("home.downloads"))
-	h.versionText.SetValue(p86l.T("home.version"))
+	h.downloadsText.SetValue(am.T("home.downloads"))
+	h.versionText.SetValue(am.T("home.version"))
 
 	if cache.IsValid() {
 		for _, asset := range cacheAssets {

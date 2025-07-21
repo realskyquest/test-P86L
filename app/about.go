@@ -37,15 +37,24 @@ type About struct {
 	aboutText   basicwidget.Text
 	credits     aboutCredits
 	licenseText basicwidget.Text
+
+	model *p86l.Model
+}
+
+func (a *About) SetModel(m *p86l.Model) {
+	a.model = m
+	a.credits.model = m
 }
 
 func (a *About) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
-	a.aboutText.SetValue(p86l.T("about.info"))
+	am := a.model.App()
+
+	a.aboutText.SetValue(am.T("about.info"))
 	a.aboutText.SetAutoWrap(true)
 	a.aboutText.SetHorizontalAlign(basicwidget.HorizontalAlignCenter)
 	a.aboutText.SetVerticalAlign(basicwidget.VerticalAlignMiddle)
 
-	a.licenseText.SetValue(p86l.ALicense)
+	a.licenseText.SetValue(am.License())
 	a.licenseText.SetAutoWrap(true)
 	a.licenseText.SetScale(0.7)
 	a.licenseText.SetHorizontalAlign(basicwidget.HorizontalAlignCenter)
@@ -79,25 +88,29 @@ type aboutCredits struct {
 	devImg   basicwidget.Image
 	leadText basicwidget.Text
 	devText  basicwidget.Text
+
+	model *p86l.Model
 }
 
 func (a *aboutCredits) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
-	img1, err1 := assets.TheImageCache.Get(p86l.E, "lead")
-	img2, err2 := assets.TheImageCache.Get(p86l.E, "dev")
+	am := a.model.App()
+
+	img1, err1 := assets.TheImageCache.Get("lead")
+	img2, err2 := assets.TheImageCache.Get("dev")
 
 	if err := cmp.Or(err1, err2); err != nil {
-		p86l.GErr = err
-		return err.Err
+		am.SetError(err)
+		return err.Error()
 	}
 
 	a.leadImg.SetImage(img1)
 	a.devImg.SetImage(img2)
 
-	a.leadText.SetValue(p86l.T("about.lead"))
+	a.leadText.SetValue(am.T("about.lead"))
 	a.leadText.SetScale(1.2)
 	a.leadText.SetHorizontalAlign(basicwidget.HorizontalAlignCenter)
 
-	a.devText.SetValue(p86l.T("about.dev"))
+	a.devText.SetValue(am.T("about.dev"))
 	a.devText.SetScale(1.2)
 	a.devText.SetHorizontalAlign(basicwidget.HorizontalAlignCenter)
 
