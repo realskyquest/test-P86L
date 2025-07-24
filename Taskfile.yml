@@ -61,7 +61,7 @@ tasks:
 
   run:debug:
     cmds:
-      - P86L_DEBUG=logs go run cmd/p86l/main.go
+      - P86L_DEBUG=log go run cmd/p86l/main.go
 
   build:
     desc: Build all release artifacts

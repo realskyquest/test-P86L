@@ -22,6 +22,7 @@
 package app
 
 import (
+	"image"
 	"p86l"
 
 	"github.com/hajimehoshi/guigui"
@@ -32,19 +33,41 @@ import (
 type Changelog struct {
 	guigui.DefaultWidget
 
-	form       basicwidget.Form
-	text       basicwidget.Text
-	viewText   basicwidget.Text
-	viewButton basicwidget.Button
+	panel   basicwidget.Panel
+	content changelogContent
 
 	model *p86l.Model
 }
 
 func (c *Changelog) SetModel(model *p86l.Model) {
 	c.model = model
+	c.content.model = model
 }
 
 func (c *Changelog) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
+	context.SetSize(&c.content, image.Pt(context.ActualSize(c).X, c.content.Height()), c)
+	c.panel.SetContent(&c.content)
+
+	appender.AppendChildWidgetWithBounds(&c.panel, context.Bounds(c))
+
+	return nil
+}
+
+type changelogContent struct {
+	guigui.DefaultWidget
+
+	text       basicwidget.Text
+	form       basicwidget.Form
+	viewText   basicwidget.Text
+	viewButton basicwidget.Button
+
+	box1   basicwidget.Background
+	box2   basicwidget.Background
+	height int
+	model  *p86l.Model
+}
+
+func (c *changelogContent) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
 	am := c.model.App()
 	dm := am.Debug()
 
@@ -52,8 +75,11 @@ func (c *Changelog) Build(context *guigui.Context, appender *guigui.ChildWidgetA
 	c.text.SetVerticalAlign(basicwidget.VerticalAlignMiddle)
 	c.text.SetAutoWrap(true)
 
+	// IsValid
 	if cache := c.model.Cache(); cache.IsValid() {
+		// If not english, get translation
 		if locale := c.model.Data().File().Locale; locale != "en" {
+			// If there is no translation, output "..."
 			if changelog := cache.Changelog(); changelog == "" {
 				c.text.SetValue("...")
 			} else {
@@ -79,9 +105,7 @@ func (c *Changelog) Build(context *guigui.Context, appender *guigui.ChildWidgetA
 
 	c.form.SetItems([]basicwidget.FormItem{
 		{
-			PrimaryWidget: &c.viewText,
-		},
-		{
+			PrimaryWidget:   &c.viewText,
 			SecondaryWidget: &c.viewButton,
 		},
 	})
@@ -90,13 +114,20 @@ func (c *Changelog) Build(context *guigui.Context, appender *guigui.ChildWidgetA
 	gl := layout.GridLayout{
 		Bounds: context.Bounds(c).Inset(u / 2),
 		Heights: []layout.Size{
-			layout.FlexibleSize(1),
-			layout.FixedSize(c.form.DefaultSize(context).Y),
-			layout.FlexibleSize(1),
+			layout.FixedSize(c.text.DefaultSizeInContainer(context, context.Bounds(c).Dx()-u).Y),
+			layout.FixedSize(c.form.DefaultSizeInContainer(context, context.Bounds(c).Dx()-u).Y),
 		},
+		RowGap: u / 2,
 	}
+	am.RenderBox(appender, &c.box1, gl.CellBounds(0, 0))
+	am.RenderBox(appender, &c.box2, gl.CellBounds(0, 1))
+	c.height = gl.CellBounds(0, 0).Dy() + gl.CellBounds(0, 1).Dy() + u*2
 	appender.AppendChildWidgetWithBounds(&c.text, gl.CellBounds(0, 0))
 	appender.AppendChildWidgetWithBounds(&c.form, gl.CellBounds(0, 1))
 
 	return nil
+}
+
+func (c *changelogContent) Height() int {
+	return c.height
 }

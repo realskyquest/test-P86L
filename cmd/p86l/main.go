@@ -56,7 +56,7 @@ func main() {
 	if version == "dev" {
 		for _, token := range strings.Split(os.Getenv("P86L_DEBUG"), ",") {
 			switch token {
-			case "logs":
+			case "log":
 				newLog := zerolog.New(os.Stdout).With().Timestamp().Logger()
 				newLog = newLog.Output(zerolog.ConsoleWriter{
 					Out:        os.Stderr,
@@ -65,6 +65,8 @@ func main() {
 
 				dm.SetLog(&newLog)
 				am.SetLogsEnabled(true)
+			case "box":
+				am.SetBoxesEnabled(true)
 			}
 		}
 	} else {

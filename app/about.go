@@ -23,6 +23,7 @@ package app
 
 import (
 	"cmp"
+	"image"
 	"p86l"
 	"p86l/assets"
 
@@ -34,25 +35,25 @@ import (
 type About struct {
 	guigui.DefaultWidget
 
-	aboutText   basicwidget.Text
-	credits     aboutCredits
+	panel       basicwidget.Panel
+	content     aboutContent
 	licenseText basicwidget.Text
 
+	box   basicwidget.Background
 	model *p86l.Model
 }
 
 func (a *About) SetModel(m *p86l.Model) {
 	a.model = m
-	a.credits.model = m
+	a.content.model = m
 }
 
 func (a *About) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
 	am := a.model.App()
 
-	a.aboutText.SetValue(am.T("about.info"))
-	a.aboutText.SetAutoWrap(true)
-	a.aboutText.SetHorizontalAlign(basicwidget.HorizontalAlignCenter)
-	a.aboutText.SetVerticalAlign(basicwidget.VerticalAlignMiddle)
+	a.panel.SetAutoBorder(true)
+	context.SetSize(&a.content, image.Pt(context.ActualSize(a).X, a.content.Height()), a)
+	a.panel.SetContent(&a.content)
 
 	a.licenseText.SetValue(am.License())
 	a.licenseText.SetAutoWrap(true)
@@ -63,36 +64,39 @@ func (a *About) Build(context *guigui.Context, appender *guigui.ChildWidgetAppen
 
 	u := basicwidget.UnitSize(context)
 	gl := layout.GridLayout{
-		Bounds: context.Bounds(a).Inset(u / 2),
+		Bounds: context.Bounds(a),
 		Widths: []layout.Size{
 			layout.FlexibleSize(1),
 		},
 		Heights: []layout.Size{
-			layout.FixedSize(u * 6),
-			layout.FixedSize(u * 5),
 			layout.FlexibleSize(1),
+			layout.FixedSize(int(float64(a.licenseText.DefaultSizeInContainer(context, context.Bounds(a).Dx()-u).Y) * 0.7)),
 		},
-		RowGap: u / 2,
 	}
-	appender.AppendChildWidgetWithBounds(&a.aboutText, gl.CellBounds(0, 0))
-	appender.AppendChildWidgetWithBounds(&a.credits, gl.CellBounds(0, 1))
-	appender.AppendChildWidgetWithBounds(&a.licenseText, gl.CellBounds(0, 2))
+	am.RenderBox(appender, &a.box, gl.CellBounds(0, 1))
+	appender.AppendChildWidgetWithBounds(&a.panel, gl.CellBounds(0, 0))
+	appender.AppendChildWidgetWithBounds(&a.licenseText, gl.CellBounds(0, 1))
 
 	return nil
 }
 
-type aboutCredits struct {
+type aboutContent struct {
 	guigui.DefaultWidget
 
-	leadImg  basicwidget.Image
-	devImg   basicwidget.Image
-	leadText basicwidget.Text
-	devText  basicwidget.Text
+	aboutText basicwidget.Text
+	form      basicwidget.Form
+	leadText  basicwidget.Text
+	devText   basicwidget.Text
+	leadImage basicwidget.Image
+	devImage  basicwidget.Image
 
-	model *p86l.Model
+	box1   basicwidget.Background
+	box2   basicwidget.Background
+	height int
+	model  *p86l.Model
 }
 
-func (a *aboutCredits) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
+func (a *aboutContent) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
 	am := a.model.App()
 
 	img1, err1 := assets.TheImageCache.Get("lead")
@@ -103,70 +107,56 @@ func (a *aboutCredits) Build(context *guigui.Context, appender *guigui.ChildWidg
 		return err.Error()
 	}
 
-	a.leadImg.SetImage(img1)
-	a.devImg.SetImage(img2)
-
-	a.leadText.SetValue(am.T("about.lead"))
-	a.leadText.SetScale(1.2)
-	a.leadText.SetHorizontalAlign(basicwidget.HorizontalAlignCenter)
-
-	a.devText.SetValue(am.T("about.dev"))
-	a.devText.SetScale(1.2)
-	a.devText.SetHorizontalAlign(basicwidget.HorizontalAlignCenter)
-
-	var gl layout.GridLayout
-	var bLeadText breakWidget
-	var bLeadImage breakWidget
-	var bDevText breakWidget
-	var bDevImage breakWidget
+	a.aboutText.SetValue(am.T("about.info"))
+	a.aboutText.SetAutoWrap(true)
+	a.aboutText.SetHorizontalAlign(basicwidget.HorizontalAlignCenter)
+	a.aboutText.SetVerticalAlign(basicwidget.VerticalAlignMiddle)
 
 	u := basicwidget.UnitSize(context)
 
-	if breakSize(context, 760) {
-		gl = layout.GridLayout{
-			Bounds: context.Bounds(a),
-			Widths: []layout.Size{
-				layout.FlexibleSize(1),
-				layout.FixedSize(max(a.leadText.DefaultSize(context).X, a.devText.DefaultSize(context).X)),
-				layout.FixedSize(u * 2),
-				layout.FixedSize(max(a.leadText.DefaultSize(context).X, a.devText.DefaultSize(context).X)),
-				layout.FixedSize(u * 2),
-				layout.FlexibleSize(1),
-			},
-			Heights: []layout.Size{
-				layout.FixedSize(u * 2),
-			},
-			ColumnGap: u,
-		}
-		bLeadText.Set(1, 0)
-		bLeadImage.Set(2, 0)
-		bDevText.Set(3, 0)
-		bDevImage.Set(4, 0)
-	} else {
-		gl = layout.GridLayout{
-			Bounds: context.Bounds(a),
-			Widths: []layout.Size{
-				layout.FlexibleSize(1),
-				layout.FixedSize(max(a.leadText.DefaultSize(context).X, a.devText.DefaultSize(context).X)),
-				layout.FixedSize(u * 2),
-				layout.FlexibleSize(1),
-			},
-			Heights: []layout.Size{
-				layout.FixedSize(u * 2),
-				layout.FixedSize(u * 2),
-			},
-			ColumnGap: u,
-			RowGap:    u / 2,
-		}
-		bLeadText.Set(1, 0)
-		bLeadImage.Set(2, 0)
-		bDevText.Set(1, 1)
-		bDevImage.Set(2, 1)
+	a.leadImage.SetImage(img1)
+	context.SetSize(&a.leadImage, image.Pt(u*4, u*4), a)
+
+	a.devImage.SetImage(img2)
+	context.SetSize(&a.devImage, image.Pt(u*4, u*4), a)
+
+	a.leadText.SetValue(am.T("about.lead"))
+	a.leadText.SetScale(1.4)
+
+	a.devText.SetValue(am.T("about.dev"))
+	a.devText.SetScale(1.4)
+
+	a.form.SetItems([]basicwidget.FormItem{
+		{
+			PrimaryWidget:   &a.leadImage,
+			SecondaryWidget: &a.leadText,
+		},
+		{
+			PrimaryWidget:   &a.devImage,
+			SecondaryWidget: &a.devText,
+		},
+	})
+
+	gl := layout.GridLayout{
+		Bounds: context.Bounds(a).Inset(u / 2),
+		Widths: []layout.Size{
+			layout.FlexibleSize(1),
+		},
+		Heights: []layout.Size{
+			layout.FixedSize(a.aboutText.DefaultSizeInContainer(context, context.Bounds(a).Dx()-u).Y),
+			layout.FixedSize(a.form.DefaultSizeInContainer(context, context.Bounds(a).Dx()-u).Y),
+		},
+		RowGap: u / 2,
 	}
-	appender.AppendChildWidgetWithBounds(&a.leadText, gl.CellBounds(bLeadText.Get()))
-	appender.AppendChildWidgetWithBounds(&a.leadImg, gl.CellBounds(bLeadImage.Get()))
-	appender.AppendChildWidgetWithBounds(&a.devText, gl.CellBounds(bDevText.Get()))
-	appender.AppendChildWidgetWithBounds(&a.devImg, gl.CellBounds(bDevImage.Get()))
+	am.RenderBox(appender, &a.box1, gl.CellBounds(0, 0))
+	am.RenderBox(appender, &a.box2, gl.CellBounds(0, 1))
+	a.height = gl.CellBounds(0, 0).Dy() + gl.CellBounds(0, 1).Dy() + u*2
+	appender.AppendChildWidgetWithBounds(&a.aboutText, gl.CellBounds(0, 0))
+	appender.AppendChildWidgetWithBounds(&a.form, gl.CellBounds(0, 1))
 
 	return nil
+}
+
+func (a *aboutContent) Height() int {
+	return a.height
 }

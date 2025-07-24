@@ -35,6 +35,12 @@ github.com/hajimehoshi/ebiten/v2 v2.9.0-alpha.9 h1:q5uizKdqDSlqm/KVVXxqVZzzFuHvO
 github.com/hajimehoshi/ebiten/v2 v2.9.0-alpha.9/go.mod h1:7ZF526xo9vzSfEPQshV2HLwdfR4G2xCBR39ATIQ7k9U=
 github.com/hajimehoshi/guigui v0.0.0-20250716114721-21ce0dd99b90 h1:JI10m+gd5CrhqEr59/urpefTzaP748Xw6zOBZ5q/ofE=
 github.com/hajimehoshi/guigui v0.0.0-20250716114721-21ce0dd99b90/go.mod h1:IcMqIA0LI6xk6kaNBSUfGhsO78K4gn6YY8zJwHIS4QY=
+github.com/hajimehoshi/guigui v0.0.0-20250721082949-ae21905a1648 h1:D230eEoPuV0M/79e65tE3vhn4vhCQs3Fzukka/UibtA=
+github.com/hajimehoshi/guigui v0.0.0-20250721082949-ae21905a1648/go.mod h1:IcMqIA0LI6xk6kaNBSUfGhsO78K4gn6YY8zJwHIS4QY=
+github.com/hajimehoshi/guigui v0.0.0-20250721092544-c9d356c6cc3d h1:ftLiYxF2YKfeyKu4Wa/rg5kfP+UGn1JmiwzZVX01DH4=
+github.com/hajimehoshi/guigui v0.0.0-20250721092544-c9d356c6cc3d/go.mod h1:IcMqIA0LI6xk6kaNBSUfGhsO78K4gn6YY8zJwHIS4QY=
+github.com/hajimehoshi/guigui v0.0.0-20250721143914-61f240049b42 h1:aZrL7M7x0UGzIyxD1NsNP4hr05b1Mdb5Zei2OUbxkVg=
+github.com/hajimehoshi/guigui v0.0.0-20250721143914-61f240049b42/go.mod h1:IcMqIA0LI6xk6kaNBSUfGhsO78K4gn6YY8zJwHIS4QY=
 github.com/hajimehoshi/oklab v0.1.0 h1:+ApSswl9LlB+8AYIC9ZaRO/r1emGtTF52YQleB3bW7w=
 github.com/hajimehoshi/oklab v0.1.0/go.mod h1:PQQ2H7nXuDlAr4pkdDRTfXp5tXdfIUKQpZbpZE7ugT4=
 github.com/hashicorp/go-version v1.7.0 h1:5tqGy27NaOTB8yJKUZELlFAS/LTKJkrmONwQKeRZfjY=

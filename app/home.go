@@ -34,72 +34,64 @@ import (
 type Home struct {
 	guigui.DefaultWidget
 
-	background basicwidget.Background
-	stats      homeStats
+	content homeContent
 
+	box   basicwidget.Background
 	model *p86l.Model
 }
 
 func (h *Home) SetModel(model *p86l.Model) {
 	h.model = model
+	h.content.model = model
 }
 
 func (h *Home) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
-	h.stats.model = h.model
-	context.SetOpacity(&h.background, 0.9)
+	am := h.model.App()
 
-	var gl layout.GridLayout
 	u := basicwidget.UnitSize(context)
-
-	if breakSize(context, 620) {
-		gl = layout.GridLayout{
-			Bounds: context.Bounds(h),
-			Widths: []layout.Size{
-				layout.FlexibleSize(1),
-			},
-			Heights: []layout.Size{
-				layout.FlexibleSize(1),
-				layout.FixedSize(u*4 - (u / 4)),
-			},
-		}
-	} else {
-		gl = layout.GridLayout{
-			Bounds: context.Bounds(h),
-			Widths: []layout.Size{
-				layout.FlexibleSize(1),
-			},
-			Heights: []layout.Size{
-				layout.FlexibleSize(1),
-				layout.FixedSize(u * 7),
-			},
-		}
+	gl := layout.GridLayout{
+		Bounds: context.Bounds(h),
+		Widths: []layout.Size{
+			layout.FlexibleSize(1),
+		},
+		Heights: []layout.Size{
+			layout.FlexibleSize(1),
+			layout.FixedSize(h.content.Height() + u),
+		},
 	}
-	appender.AppendChildWidgetWithBounds(&h.background, gl.CellBounds(0, 1))
-	appender.AppendChildWidgetWithBounds(&h.stats, gl.CellBounds(0, 1))
+	am.RenderBox(appender, &h.box, gl.CellBounds(0, 0))
+	appender.AppendChildWidgetWithBounds(&h.content, gl.CellBounds(0, 1))
 
 	return nil
 }
 
-type homeStats struct {
+type homeContent struct {
 	guigui.DefaultWidget
 
-	image basicwidget.Image
+	background basicwidget.Background
+	p86lImage  basicwidget.Image
 
 	form1           basicwidget.Form
 	welcomeText     basicwidget.Text
-	welcomeStatText basicwidget.Text
+	usernameText    basicwidget.Text
+	downloadedText  basicwidget.Text
+	gameVersionText basicwidget.Text
 
-	form2             basicwidget.Form
-	downloadsText     basicwidget.Text
-	downloadsStatText basicwidget.Text
-	versionText       basicwidget.Text
-	versionStatText   basicwidget.Text
+	form2         basicwidget.Form
+	downloadsText basicwidget.Text
+	countText     basicwidget.Text
+	versionText   basicwidget.Text
+	latestText    basicwidget.Text
 
-	model *p86l.Model
+	box1   basicwidget.Background
+	box2   basicwidget.Background
+	height int
+	model  *p86l.Model
 }
 
-func (h *homeStats) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
+func (h *homeContent) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
 	am := h.model.App()
+	data := h.model.Data()
 	cache := h.model.Cache()
 	cacheAssets := cache.File().Repo.Assets
 
@@ -110,16 +102,27 @@ func (h *homeStats) Build(context *guigui.Context, appender *guigui.ChildWidgetA
 		return err.Error()
 	}
 
-	h.image.SetImage(img)
+	context.SetOpacity(&h.background, 0.9)
+	h.p86lImage.SetImage(img)
+
 	h.welcomeText.SetValue(am.T("home.welcome"))
-	h.welcomeStatText.SetValue(p86l.GetUsername())
+	h.usernameText.SetValue(p86l.GetUsername())
+
+	h.downloadedText.SetValue(am.T("home.downloaded"))
+	if version := data.File().GameVersion; version == "" {
+		h.gameVersionText.SetValue("")
+	} else {
+		h.gameVersionText.SetValue(version)
+	}
 
 	h.form1.SetItems([]basicwidget.FormItem{
 		{
-			PrimaryWidget: &h.welcomeText,
+			PrimaryWidget:   &h.welcomeText,
+			SecondaryWidget: &h.usernameText,
 		},
 		{
-			SecondaryWidget: &h.welcomeStatText,
+			PrimaryWidget:   &h.downloadedText,
+			SecondaryWidget: &h.gameVersionText,
 		},
 	})
 
@@ -129,89 +132,50 @@ func (h *homeStats) Build(context *guigui.Context, appender *guigui.ChildWidgetA
 	if cache.IsValid() {
 		for _, asset := range cacheAssets {
 			if name := asset.GetName(); p86l.IsValidGameFile(name) {
-				h.downloadsStatText.SetValue(humanize.FormatInteger("#,###.", asset.GetDownloadCount()))
+				h.countText.SetValue(humanize.FormatInteger("#,###.", asset.GetDownloadCount()))
 				break
 			}
 		}
-		h.versionStatText.SetValue(cache.File().Repo.GetTagName())
+		h.latestText.SetValue(cache.File().Repo.GetTagName())
 	} else {
-		h.downloadsStatText.SetValue("...")
-		h.versionStatText.SetValue("...")
+		h.countText.SetValue("...")
+		h.latestText.SetValue("...")
 	}
 
 	h.form2.SetItems([]basicwidget.FormItem{
 		{
 			PrimaryWidget:   &h.downloadsText,
-			SecondaryWidget: &h.downloadsStatText,
+			SecondaryWidget: &h.countText,
 		},
 		{
 			PrimaryWidget:   &h.versionText,
-			SecondaryWidget: &h.versionStatText,
+			SecondaryWidget: &h.latestText,
 		},
 	})
 
-	var gl layout.GridLayout
-	var glT layout.GridLayout
-	var bSmall bool
-	var bImage breakWidget
-	var bForm1 breakWidget
-	var bForm2 breakWidget
-
 	u := basicwidget.UnitSize(context)
-
-	if breakSize(context, 620) {
-		gl = layout.GridLayout{
-			Bounds: context.Bounds(h),
-			Widths: []layout.Size{
-				layout.FixedSize(u*3 - (u / 2)),
-				layout.FixedSize(max(h.welcomeText.DefaultSize(context).X, h.welcomeStatText.DefaultSize(context).X) + u),
-				layout.FixedSize(u * 8),
-			},
-			Heights: []layout.Size{
-				layout.FixedSize(u / 2),
-				layout.FlexibleSize(1),
-			},
-			ColumnGap: u / 2,
-		}
-		bImage.Set(0, 1)
-		bForm1.Set(1, 1)
-		bForm2.Set(2, 1)
-		bSmall = false
-	} else {
-		gl = layout.GridLayout{
-			Bounds: context.Bounds(h),
-			Widths: []layout.Size{
-				layout.FixedSize(u / 2),
-				layout.FlexibleSize(1),
-				layout.FixedSize(u / 2),
-			},
-			Heights: []layout.Size{
-				layout.FixedSize(u / 2),
-				layout.FlexibleSize(1),
-				layout.FlexibleSize(1),
-			},
-			ColumnGap: u / 2,
-		}
-		bImage.Set(0, 0)
-		bForm1.Set(1, 0)
-		bForm2.Set(1, 2)
-		bSmall = true
-	}
-	glT = layout.GridLayout{
-		Bounds: gl.CellBounds(1, 1),
+	gl := layout.GridLayout{
+		Bounds: context.Bounds(h),
 		Widths: []layout.Size{
 			layout.FixedSize(u*3 - (u / 2)),
 			layout.FlexibleSize(1),
+			layout.FlexibleSize(1),
+		},
+		Heights: []layout.Size{
+			layout.FlexibleSize(1),
 		},
 	}
-	if bSmall {
-		appender.AppendChildWidgetWithBounds(&h.image, glT.CellBounds(bImage.Get()))
-		appender.AppendChildWidgetWithBounds(&h.form1, glT.CellBounds(bForm1.Get()))
-	} else {
-		appender.AppendChildWidgetWithBounds(&h.image, gl.CellBounds(bImage.Get()))
-		appender.AppendChildWidgetWithBounds(&h.form1, gl.CellBounds(bForm1.Get()))
-	}
-	appender.AppendChildWidgetWithBounds(&h.form2, gl.CellBounds(bForm2.Get()))
+	am.RenderBox(appender, &h.box1, gl.CellBounds(1, 0).Inset(u/2))
+	am.RenderBox(appender, &h.box2, gl.CellBounds(2, 0).Inset(u/2))
+	h.height = max(h.form1.DefaultSizeInContainer(context, context.Bounds(h).Dx()-u).Y, h.form2.DefaultSizeInContainer(context, context.Bounds(h).Dx()).Y)
+	appender.AppendChildWidgetWithBounds(&h.background, context.Bounds(h))
+	appender.AppendChildWidgetWithBounds(&h.p86lImage, gl.CellBounds(0, 0))
+	appender.AppendChildWidgetWithBounds(&h.form1, gl.CellBounds(1, 0).Inset(u/2))
+	appender.AppendChildWidgetWithBounds(&h.form2, gl.CellBounds(2, 0).Inset(u/2))
 
 	return nil
+}
+
+func (h *homeContent) Height() int {
+	return h.height
 }

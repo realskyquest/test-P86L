@@ -22,11 +22,14 @@
 package p86l
 
 import (
+	"image"
 	pd "p86l/internal/debug"
 	"p86l/internal/file"
 
 	translator "github.com/Conight/go-googletrans"
 	"github.com/google/go-github/v71/github"
+	"github.com/hajimehoshi/guigui"
+	"github.com/hajimehoshi/guigui/basicwidget"
 	"github.com/hashicorp/go-version"
 	"github.com/nicksnyder/go-i18n/v2/i18n"
 )
@@ -36,6 +39,7 @@ type AppModel struct {
 	plainVersion string
 	version      *version.Version
 	logs         bool
+	box          bool
 
 	githubClient *github.Client
 
@@ -81,10 +85,26 @@ func (a *AppModel) Version() *version.Version {
 	return a.version
 }
 
+// -- start of debug --
+
 // LogsEnabled returns whether logging is enabled in the application.
 func (a *AppModel) LogsEnabled() bool {
 	return a.logs
 }
+
+// BoxesEnabled returns whether boxes is enabled in the application,
+// renders a background on widgets to test widget bounds.
+func (a *AppModel) BoxesEnabled() bool {
+	return a.box
+}
+
+func (a *AppModel) RenderBox(appender *guigui.ChildWidgetAppender, widget *basicwidget.Background, bounds image.Rectangle) {
+	if a.BoxesEnabled() {
+		appender.AppendChildWidgetWithBounds(widget, bounds)
+	}
+}
+
+// -- end of debug --
 
 // GithubClient returns the GitHub client for API interactions.
 func (a *AppModel) GithubClient() *github.Client {
@@ -181,6 +201,11 @@ func (a *AppModel) SetVersion(value string) *pd.Error {
 // SetLogsEnabled sets whether logging is enabled in the application.
 func (a *AppModel) SetLogsEnabled(enabled bool) {
 	a.logs = enabled
+}
+
+// SetBoxesEnabled sets whether boxes is enabled in the application.
+func (a *AppModel) SetBoxesEnabled(enabled bool) {
+	a.box = enabled
 }
 
 // Set i18nBundle.

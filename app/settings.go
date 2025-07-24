@@ -22,6 +22,7 @@
 package app
 
 import (
+	"image"
 	"p86l"
 	"p86l/configs"
 	pd "p86l/internal/debug"
@@ -29,57 +30,37 @@ import (
 
 	"github.com/hajimehoshi/guigui"
 	"github.com/hajimehoshi/guigui/basicwidget"
-	"github.com/hajimehoshi/guigui/layout"
 	"golang.org/x/text/language"
 )
 
 type Settings struct {
 	guigui.DefaultWidget
 
-	data  settingsData
-	open  settingsOpen
-	reset settingsReset
+	panel   basicwidget.Panel
+	content settingsContent
 
 	model *p86l.Model
-	err   *pd.Error
 }
 
 func (s *Settings) SetModel(model *p86l.Model) {
 	s.model = model
+	s.content.model = s.model
 }
 
 func (s *Settings) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
-	am := s.model.App()
+	context.SetSize(&s.content, image.Pt(context.ActualSize(s).X, s.content.Height()), s)
+	s.panel.SetContent(&s.content)
 
-	if s.err != nil {
-		am.SetError(s.err)
-		return s.err.Error()
-	}
-
-	s.data.model = s.model
-	s.open.model = s.model
-	s.reset.model = s.model
-
-	u := basicwidget.UnitSize(context)
-	gl := layout.GridLayout{
-		Bounds: context.Bounds(s).Inset(u / 2),
-		Heights: []layout.Size{
-			layout.FixedSize(u * 7),
-			layout.FixedSize(u * 4),
-			layout.FixedSize(u * 5),
-		},
-	}
-	appender.AppendChildWidgetWithBounds(&s.data, gl.CellBounds(0, 0))
-	appender.AppendChildWidgetWithBounds(&s.open, gl.CellBounds(0, 1))
-	appender.AppendChildWidgetWithBounds(&s.reset, gl.CellBounds(0, 2))
+	appender.AppendChildWidgetWithBounds(&s.panel, context.Bounds(s))
 
 	return nil
 }
 
-type settingsData struct {
+type settingsContent struct {
 	guigui.DefaultWidget
 
-	form                  basicwidget.Form
+	form basicwidget.Form
+
 	localeText            basicwidget.Text
 	localeDropdownList    basicwidget.DropdownList[language.Tag]
 	colorModeText         basicwidget.Text
@@ -87,16 +68,32 @@ type settingsData struct {
 	scaleText             basicwidget.Text
 	scaleSegmentedControl basicwidget.SegmentedControl[int]
 
-	model *p86l.Model
+	companyFolderText    basicwidget.Text
+	companyFolderButton  basicwidget.Button
+	launcherFolderText   basicwidget.Text
+	launcherFolderButton basicwidget.Button
+
+	dataButton  basicwidget.Button
+	cacheButton basicwidget.Button
+
+	box    basicwidget.Background
+	height int
+	model  *p86l.Model
 
 	err *pd.Error
 }
 
-func (s *settingsData) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
+func (s *settingsContent) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
 	am := s.model.App()
 	dm := am.Debug()
+	fs := am.FileSystem()
 	data := s.model.Data()
 	cache := s.model.Cache()
+
+	if s.err != nil {
+		am.SetError(s.err)
+		return s.err.Error()
+	}
 
 	s.localeText.SetValue(am.T("settings.locale"))
 	s.colorModeText.SetValue(am.T("settings.colormode"))
@@ -177,47 +174,6 @@ func (s *settingsData) Build(context *guigui.Context, appender *guigui.ChildWidg
 	})
 	s.scaleSegmentedControl.SelectItemByID(data.File().AppScale)
 
-	if s.err != nil {
-		am.SetError(s.err)
-		return s.err.Error()
-	}
-
-	s.form.SetItems([]basicwidget.FormItem{
-		{
-			PrimaryWidget:   &s.localeText,
-			SecondaryWidget: &s.localeDropdownList,
-		},
-		{
-			PrimaryWidget:   &s.colorModeText,
-			SecondaryWidget: &s.colorModeToggle,
-		},
-		{
-			PrimaryWidget:   &s.scaleText,
-			SecondaryWidget: &s.scaleSegmentedControl,
-		},
-	})
-
-	appender.AppendChildWidgetWithBounds(&s.form, context.Bounds(s))
-	return nil
-}
-
-type settingsOpen struct {
-	guigui.DefaultWidget
-
-	form                 basicwidget.Form
-	companyFolderText    basicwidget.Text
-	companyFolderButton  basicwidget.Button
-	launcherFolderText   basicwidget.Text
-	launcherFolderButton basicwidget.Button
-
-	model *p86l.Model
-}
-
-func (s *settingsOpen) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
-	am := s.model.App()
-	dm := am.Debug()
-	fs := am.FileSystem()
-
 	s.companyFolderText.SetValue(am.T("settings.company"))
 	s.companyFolderButton.SetText(am.T("common.open"))
 	s.launcherFolderText.SetValue(am.T("settings.launcher"))
@@ -233,37 +189,6 @@ func (s *settingsOpen) Build(context *guigui.Context, appender *guigui.ChildWidg
 			fs.OpenFileManager(dm, filepath.Join(fs.CompanyDirPath, configs.AppName))
 		}()
 	})
-
-	s.form.SetItems([]basicwidget.FormItem{
-		{
-			PrimaryWidget:   &s.companyFolderText,
-			SecondaryWidget: &s.companyFolderButton,
-		},
-		{
-			PrimaryWidget:   &s.launcherFolderText,
-			SecondaryWidget: &s.launcherFolderButton,
-		},
-	})
-
-	appender.AppendChildWidgetWithBounds(&s.form, context.Bounds(s))
-	return nil
-}
-
-type settingsReset struct {
-	guigui.DefaultWidget
-
-	form        basicwidget.Form
-	dataButton  basicwidget.Button
-	cacheButton basicwidget.Button
-
-	model *p86l.Model
-}
-
-func (s *settingsReset) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
-	am := s.model.App()
-	dm := am.Debug()
-	data := s.model.Data()
-	cache := s.model.Cache()
 
 	s.dataButton.SetText(am.T("settings.resetdata"))
 	s.cacheButton.SetText(am.T("settings.resetcache"))
@@ -283,15 +208,40 @@ func (s *settingsReset) Build(context *guigui.Context, appender *guigui.ChildWid
 
 	s.form.SetItems([]basicwidget.FormItem{
 		{
-			PrimaryWidget:   nil,
+			PrimaryWidget:   &s.localeText,
+			SecondaryWidget: &s.localeDropdownList,
+		},
+		{
+			PrimaryWidget:   &s.colorModeText,
+			SecondaryWidget: &s.colorModeToggle,
+		},
+		{
+			PrimaryWidget:   &s.scaleText,
+			SecondaryWidget: &s.scaleSegmentedControl,
+		},
+		{
+			PrimaryWidget:   &s.companyFolderText,
+			SecondaryWidget: &s.companyFolderButton,
+		},
+		{
+			PrimaryWidget:   &s.launcherFolderText,
+			SecondaryWidget: &s.launcherFolderButton,
+		},
+		{
 			SecondaryWidget: &s.dataButton,
 		},
 		{
-			PrimaryWidget:   nil,
 			SecondaryWidget: &s.cacheButton,
 		},
 	})
+	u := basicwidget.UnitSize(context)
+	am.RenderBox(appender, &s.box, context.Bounds(s).Inset(u/2))
+	s.height = s.form.DefaultSizeInContainer(context, context.Bounds(s).Inset(u/2).Dx()-u).Y + u
+	appender.AppendChildWidgetWithBounds(&s.form, context.Bounds(s).Inset(u/2))
 
-	appender.AppendChildWidgetWithBounds(&s.form, context.Bounds(s))
 	return nil
+}
+
+func (c *settingsContent) Height() int {
+	return c.height
 }

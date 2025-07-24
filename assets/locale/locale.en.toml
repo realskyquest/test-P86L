@@ -6,6 +6,7 @@ title = "Home"
 welcome = "Welcome back,"
 downloads = "Downloads:"
 version = "Latest version:"
+downloaded = "Downloaded:"
 
 [play]
 title = "Play"

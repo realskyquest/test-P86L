@@ -9,7 +9,7 @@ require (
 	github.com/dustin/go-humanize v1.0.1
 	github.com/google/go-github/v71 v71.0.0
 	github.com/hajimehoshi/ebiten/v2 v2.9.0-alpha.9
-	github.com/hajimehoshi/guigui v0.0.0-20250716114721-21ce0dd99b90
+	github.com/hajimehoshi/guigui v0.0.0-20250721143914-61f240049b42
 	github.com/hashicorp/go-version v1.7.0
 	github.com/kisielk/errcheck v1.9.0
 	github.com/nicksnyder/go-i18n/v2 v2.6.0
