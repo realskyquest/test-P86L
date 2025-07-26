@@ -119,9 +119,9 @@ func (c *changelogContent) Build(context *guigui.Context, appender *guigui.Child
 		},
 		RowGap: u / 2,
 	}
+	c.height = gl.CellBounds(0, 0).Dy() + gl.CellBounds(0, 1).Dy() + u*2
 	am.RenderBox(appender, &c.box1, gl.CellBounds(0, 0))
 	am.RenderBox(appender, &c.box2, gl.CellBounds(0, 1))
-	c.height = gl.CellBounds(0, 0).Dy() + gl.CellBounds(0, 1).Dy() + u*2
 	appender.AppendChildWidgetWithBounds(&c.text, gl.CellBounds(0, 0))
 	appender.AppendChildWidgetWithBounds(&c.form, gl.CellBounds(0, 1))
 

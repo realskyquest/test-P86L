@@ -235,8 +235,8 @@ func (s *settingsContent) Build(context *guigui.Context, appender *guigui.ChildW
 		},
 	})
 	u := basicwidget.UnitSize(context)
-	am.RenderBox(appender, &s.box, context.Bounds(s).Inset(u/2))
 	s.height = s.form.DefaultSizeInContainer(context, context.Bounds(s).Inset(u/2).Dx()-u).Y + u
+	am.RenderBox(appender, &s.box, context.Bounds(s).Inset(u/2))
 	appender.AppendChildWidgetWithBounds(&s.form, context.Bounds(s).Inset(u/2))
 
 	return nil
