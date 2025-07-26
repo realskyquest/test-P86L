@@ -26,6 +26,7 @@ import (
 	"image"
 	"p86l"
 	"p86l/assets"
+	"strings"
 
 	"github.com/hajimehoshi/guigui"
 	"github.com/hajimehoshi/guigui/basicwidget"
@@ -35,11 +36,9 @@ import (
 type About struct {
 	guigui.DefaultWidget
 
-	panel       basicwidget.Panel
-	content     aboutContent
-	licenseText basicwidget.Text
+	panel   basicwidget.Panel
+	content aboutContent
 
-	box   basicwidget.Background
 	model *p86l.Model
 }
 
@@ -49,33 +48,19 @@ func (a *About) SetModel(m *p86l.Model) {
 }
 
 func (a *About) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
-	am := a.model.App()
+	bounds := context.Bounds(a)
+	contentHeight := a.content.Height()
 
-	a.panel.SetAutoBorder(true)
-	context.SetSize(&a.content, image.Pt(context.ActualSize(a).X, a.content.Height()), a)
+	var contentSize image.Point
+	if bounds.Dy() > contentHeight {
+		contentSize = image.Pt(bounds.Dx(), bounds.Dy())
+	} else {
+		contentSize = image.Pt(bounds.Dx(), contentHeight)
+	}
+	context.SetSize(&a.content, contentSize, a)
 	a.panel.SetContent(&a.content)
 
-	a.licenseText.SetValue(am.License())
-	a.licenseText.SetAutoWrap(true)
-	a.licenseText.SetScale(0.7)
-	a.licenseText.SetHorizontalAlign(basicwidget.HorizontalAlignCenter)
-	a.licenseText.SetVerticalAlign(basicwidget.VerticalAlignBottom)
-	context.SetOpacity(&a.licenseText, 0.7)
-
-	u := basicwidget.UnitSize(context)
-	gl := layout.GridLayout{
-		Bounds: context.Bounds(a),
-		Widths: []layout.Size{
-			layout.FlexibleSize(1),
-		},
-		Heights: []layout.Size{
-			layout.FlexibleSize(1),
-			layout.FixedSize(int(float64(a.licenseText.DefaultSizeInContainer(context, context.Bounds(a).Dx()-u).Y) * 0.7)),
-		},
-	}
-	am.RenderBox(appender, &a.box, gl.CellBounds(0, 1))
-	appender.AppendChildWidgetWithBounds(&a.panel, gl.CellBounds(0, 0))
-	appender.AppendChildWidgetWithBounds(&a.licenseText, gl.CellBounds(0, 1))
+	appender.AppendChildWidgetWithBounds(&a.panel, context.Bounds(a))
 
 	return nil
 }
@@ -83,15 +68,17 @@ func (a *About) Build(context *guigui.Context, appender *guigui.ChildWidgetAppen
 type aboutContent struct {
 	guigui.DefaultWidget
 
-	aboutText basicwidget.Text
-	form      basicwidget.Form
-	leadText  basicwidget.Text
-	devText   basicwidget.Text
-	leadImage basicwidget.Image
-	devImage  basicwidget.Image
+	aboutText   basicwidget.Text
+	form        basicwidget.Form
+	leadText    basicwidget.Text
+	devText     basicwidget.Text
+	leadImage   basicwidget.Image
+	devImage    basicwidget.Image
+	licenseText basicwidget.Text
 
 	box1   basicwidget.Background
 	box2   basicwidget.Background
+	box3   basicwidget.Background
 	height int
 	model  *p86l.Model
 }
@@ -137,6 +124,12 @@ func (a *aboutContent) Build(context *guigui.Context, appender *guigui.ChildWidg
 		},
 	})
 
+	a.licenseText.SetValue(strings.Join(strings.Fields(am.License()), " "))
+	a.licenseText.SetAutoWrap(true)
+	a.licenseText.SetScale(0.7)
+	a.licenseText.SetHorizontalAlign(basicwidget.HorizontalAlignCenter)
+	context.SetOpacity(&a.licenseText, 0.7)
+
 	gl := layout.GridLayout{
 		Bounds: context.Bounds(a).Inset(u / 2),
 		Widths: []layout.Size{
@@ -145,14 +138,18 @@ func (a *aboutContent) Build(context *guigui.Context, appender *guigui.ChildWidg
 		Heights: []layout.Size{
 			layout.FixedSize(a.aboutText.DefaultSizeInContainer(context, context.Bounds(a).Dx()-u).Y),
 			layout.FixedSize(a.form.DefaultSizeInContainer(context, context.Bounds(a).Dx()-u).Y),
+			layout.FlexibleSize(1),
+			layout.FixedSize(a.licenseText.DefaultSizeInContainer(context, context.Bounds(a).Dx()-u).Y),
 		},
 		RowGap: u / 2,
 	}
+	a.height = gl.CellBounds(0, 0).Dy() + gl.CellBounds(0, 1).Dy() + gl.CellBounds(0, 3).Dy() + u*2
 	am.RenderBox(appender, &a.box1, gl.CellBounds(0, 0))
 	am.RenderBox(appender, &a.box2, gl.CellBounds(0, 1))
-	a.height = gl.CellBounds(0, 0).Dy() + gl.CellBounds(0, 1).Dy() + u*2
+	am.RenderBox(appender, &a.box3, gl.CellBounds(0, 3))
 	appender.AppendChildWidgetWithBounds(&a.aboutText, gl.CellBounds(0, 0))
 	appender.AppendChildWidgetWithBounds(&a.form, gl.CellBounds(0, 1))
+	appender.AppendChildWidgetWithBounds(&a.licenseText, gl.CellBounds(0, 3))
 
 	return nil
 }
