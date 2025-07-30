@@ -28,94 +28,22 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-const (
-	ErrorManager   = "ErrorManager"
-	FileManager    = "FileManager"
-	NetworkManager = "NetworkManager"
-)
-
 type ErrorType string
 
-const (
-	UnknownError ErrorType = "unknown"
-	AppError     ErrorType = "app"
-	FSError      ErrorType = "filesystem"
-	DataError    ErrorType = "data"
-	CacheError   ErrorType = "cache"
-	NetworkError ErrorType = "network"
-)
+type Result struct {
+	Err *Error
+	Ok  bool
+}
 
-const (
-	// App errors (1001-1999)
-	ErrUnknown int = iota + 1001
-	ErrBrowserOpen
+func NotOk(err *Error) Result {
+	return Result{Err: err, Ok: false}
+}
 
-	ErrLauncherVersionInvalid
+func Ok() Result {
+	return Result{Ok: true}
+}
 
-	ErrGameVersionInvalid
-	ErrGameNotExist
-	ErrGameRunning
-)
-
-const (
-	// Filesystem errors (2001-2999)
-	ErrFSOpenFileManagerInvalid int = iota + 2001
-
-	ErrFSDirInvalid
-	ErrFSDirNew
-	ErrFSDirNotExist
-	ErrFSDirRead
-	ErrFSDirRename
-	ErrFSDirRemove
-
-	ErrFSFileInvalid
-	ErrFSNewFileInvalid
-	ErrFSFileWrite
-	ErrFSFileNotExist
-
-	// -- root --
-
-	ErrFSRootInvalid
-
-	ErrFSRootDirInvalid
-	ErrFSRootDirNew
-
-	ErrFSRootFileInvalid
-	ErrFSRootFileNew
-	ErrFSRootFileNotExist
-	ErrFSRootFileRead
-	ErrFSRootFileWrite
-	ErrFSRootFileRemove
-	ErrFSRootFileClose
-)
-
-const (
-	// Data errors (3001-3999)
-	ErrDataLoad int = iota + 3001
-	ErrDataSave
-	ErrDataReset
-	ErrDataLocaleInvalid
-)
-
-const (
-	// Cache errors (4001-4999)
-	ErrCacheLoad int = iota + 4001
-	ErrCacheSave
-	ErrCacheReset
-	ErrCacheInvalid
-	ErrCacheRepoInvalid
-	ErrCacheBodyInvalid
-	ErrCacheURLInvalid
-	ErrCacheAssetsInvalid
-)
-
-const (
-	// // Network errors (5001-5999)
-	ErrNetworkRateLimitInvalid int = iota + 5001
-	ErrNetworkCacheRequest
-	ErrNetworkDownloadRequest
-	ErrNetworkStatusNotOk
-)
+// -- Custom Error --
 
 type Error struct {
 	err     error
@@ -158,21 +86,23 @@ func (e *Error) String() string {
 	return ""
 }
 
-func (e *Error) LogErr(logStruct, logFunc string) {
-	log.Error().Int("Code", e.code).Any("Type", e.errType).Err((e.err)).Str(logStruct, logFunc).Msg(ErrorManager)
+func (e *Error) LogErr(logStruct, logFunc, manager string) {
+	log.Error().Int("Code", e.code).Any("Type", e.errType).Err((e.err)).Str(logStruct, logFunc).Msg(manager)
 }
 
-func (e *Error) LogErrStack(logStruct, logFunc string) {
-	log.Error().Stack().Int("Code", e.code).Any("Type", e.errType).Err((e.err)).Str(logStruct, logFunc).Msg(ErrorManager)
+func (e *Error) LogErrStack(logStruct, logFunc, manager string) {
+	log.Error().Stack().Int("Code", e.code).Any("Type", e.errType).Err((e.err)).Str(logStruct, logFunc).Msg(manager)
 }
 
-func (e *Error) LogWarn(logStruct, logFunc string) {
-	log.Warn().Int("Code", e.code).Any("Type", e.errType).Err((e.err)).Str(logStruct, logFunc).Msg(ErrorManager)
+func (e *Error) LogWarn(logStruct, logFunc, manager string) {
+	log.Warn().Int("Code", e.code).Any("Type", e.errType).Err((e.err)).Str(logStruct, logFunc).Msg(manager)
 }
 
-func (e *Error) LogWarnStack(logStruct, logFunc string) {
-	log.Warn().Stack().Int("Code", e.code).Any("Type", e.errType).Err((e.err)).Str(logStruct, logFunc).Msg(ErrorManager)
+func (e *Error) LogWarnStack(logStruct, logFunc, manager string) {
+	log.Warn().Stack().Int("Code", e.code).Any("Type", e.errType).Err((e.err)).Str(logStruct, logFunc).Msg(manager)
 }
+
+// -- ErrorManager --
 
 type Debug struct {
 	log   *zerolog.Logger
@@ -196,12 +126,12 @@ func (d *Debug) SetLog(logger *zerolog.Logger) {
 	d.log = logger
 }
 
-func (d *Debug) SetToast(err *Error) {
-	err.LogWarnStack("Debug", "SetToast")
+func (d *Debug) SetToast(err *Error, manager string) {
+	err.LogWarnStack("Debug", "SetToast", manager)
 	d.toast = err
 }
 
-func (d *Debug) SetPopup(err *Error) {
-	err.LogWarnStack("Debug", "SetPopup")
+func (d *Debug) SetPopup(err *Error, manager string) {
+	err.LogWarnStack("Debug", "SetPopup", manager)
 	d.popup = err
 }
