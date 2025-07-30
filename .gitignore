@@ -23,9 +23,9 @@ go.work
 .vscode/tasks.json
 /.vscode
 
+vettool
 /.task
 /bin
 /cmd/p86l/versioninfo.json
 /cmd/p86l/app.manifest
 /cmd/p86l/resource.syso
-
