@@ -34,155 +34,143 @@ import (
 )
 
 // Used to make folders.
-func mkdirAll(path string) *pd.Error {
+func mkdirAll(path string) pd.Result {
 	_, err := os.Stat(path)
 	if !errors.Is(err, fs.ErrNotExist) && err != nil {
-		return nil
+		return pd.Ok()
 	}
 	err = os.MkdirAll(path, 0755)
 	if err != nil {
-		return pd.New(err, pd.FSError, pd.ErrFSDirNew)
+		return pd.NotOk(pd.New(err, pd.FSError, pd.ErrFSDirNew))
 	}
-	return nil
+	return pd.Ok()
 }
 
 type AppFS struct {
-	Root           *os.Root
 	CompanyDirPath string
+	Root           *os.Root
 }
 
-// Make new FS for app.
-func NewFS(extra ...string) (*AppFS, *pd.Error) {
+// NewFS returns a filesystem manager.
+func NewFS(extra ...string) (pd.Result, *AppFS) {
 	// Handles the company path and a path for debugging.
 	var companyPath string
 	if len(extra) == 1 && extra[0] != "" {
-		cPath, err := GetCompanyPath(extra[0])
-		if err != nil {
-			return nil, err
+		if result, cPath := GetCompanyPath(extra[0]); !result.Ok {
+			return result, nil
+		} else {
+			companyPath = cPath
 		}
-		companyPath = cPath
 	} else {
-		cPath, err := GetCompanyPath()
-		if err != nil {
-			return nil, err
+		if result, cPath := GetCompanyPath(); !result.Ok {
+			return result, nil
+		} else {
+			companyPath = cPath
 		}
-		companyPath = cPath
 	}
 
 	// Makes the path for company and app.
-	err := mkdirAll(filepath.Join(companyPath, configs.AppName))
-	if err != nil {
-		return nil, err
+	result := mkdirAll(filepath.Join(companyPath, configs.AppName))
+	if !result.Ok {
+		return result, nil
 	}
 
 	// Creates a virtual filesystem thats in company path, that protects/restricts changes outside of it.
-	root, rErr := os.OpenRoot(companyPath)
-	if rErr != nil {
-		return nil, pd.New(rErr, pd.FSError, pd.ErrFSRootInvalid)
+	root, err := os.OpenRoot(companyPath)
+	if err != nil {
+		return pd.NotOk(pd.New(err, pd.FSError, pd.ErrFSRootInvalid)), nil
 	}
 
-	return &AppFS{
-		Root:           root,
-		CompanyDirPath: companyPath,
-	}, nil
+	return pd.Ok(), &AppFS{CompanyDirPath: companyPath, Root: root}
 }
 
 // Opens the filemanager app with the given path.
-func (a *AppFS) OpenFileManager(dm *pd.Debug, path string) *pd.Error {
+func (a *AppFS) OpenFileManager(dm *pd.Debug, path string) pd.Result {
 	if err := open.Run(path); err != nil {
-		return pd.New(err, pd.FSError, pd.ErrFSOpenFileManagerInvalid)
+		return pd.NotOk(pd.New(err, pd.FSError, pd.ErrFSOpenFileManagerInvalid))
 	}
 	dm.Log().Info().Str("Path", path).Str("AppFS", "OpenFileManager").Msg("FileManager")
-	return nil
+	return pd.Ok()
 }
 
-// Checks if the directory exists, uses OS
-func (a *AppFS) IsDir(filePath string) *pd.Error {
-	_, err := os.Stat(filePath)
-	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			return pd.New(err, pd.FSError, pd.ErrFSRootFileNotExist)
-		}
-		return pd.New(err, pd.FSError, pd.ErrFSRootFileInvalid)
-	}
-	return nil
+// Path returns a absolute path, .../Project-86-Community/*
+func (a *AppFS) Path(components ...string) string {
+	return filepath.Join(append([]string{a.CompanyDirPath}, components...)...)
 }
 
-// same as `IsDir` but its restricted via os.Root
-func (a *AppFS) IsDirR(statFile string) *pd.Error {
-	_, err := a.Root.Stat(statFile)
-	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			return pd.New(err, pd.FSError, pd.ErrFSRootFileNotExist)
-		}
-		return pd.New(err, pd.FSError, pd.ErrFSRootFileInvalid)
-	}
-	return nil
+// PathRoot returns a relative path.
+func (a *AppFS) PathRoot(components ...string) string {
+	return filepath.Join(components...)
 }
 
-// Saves a file to disk.
-func (a *AppFS) Save(saveFile string, bytes []byte) *pd.Error {
-	file, err := a.Root.Create(saveFile)
-	if err != nil {
-		return pd.New(err, pd.FSError, pd.ErrFSRootFileNew)
-	}
-
-	_, err = file.Write(bytes)
-	if err != nil {
-		return pd.New(err, pd.FSError, pd.ErrFSRootFileWrite)
-	}
-
-	return nil
+// PathLauncher returns a relative path, Project-86-Launcher/*
+func (a *AppFS) PathLauncher(components ...string) string {
+	return filepath.Join(append([]string{a.PathDirApp()}, components...)...)
 }
 
-// Loads binary data from a file in disk.
-func (a *AppFS) Load(loadFile string) ([]byte, *pd.Error) {
-	dErr := a.IsDirR(loadFile)
-	if dErr != nil {
-		return nil, dErr
+// TODO: List?
+
+// Load returns bytes from a file.
+func (a *AppFS) Load(loadFile string) (pd.Result, []byte) {
+	if result := a.ExistsRoot(loadFile); !result.Ok {
+		return result, nil
 	}
 
 	file, err := a.Root.Open(loadFile)
 	if err != nil {
-		return nil, pd.New(err, pd.FSError, pd.ErrFSRootFileInvalid)
+		return pd.NotOk(pd.New(err, pd.FSError, pd.ErrFSRootFileInvalid)), nil
 	}
+	defer file.Close()
 
 	b, err := io.ReadAll(file)
 	if err != nil {
-		return nil, pd.New(err, pd.FSError, pd.ErrFSRootFileRead)
+		return pd.NotOk(pd.New(err, pd.FSError, pd.ErrFSRootFileRead)), nil
 	}
 
-	return b, nil
+	return pd.Ok(), b
 }
 
-// /Project-86-Launcher/
-func (a *AppFS) DirAppPath() string {
-	return configs.AppName
+// Exists returns a result based on absolute path.
+func (a *AppFS) Exists(components ...string) pd.Result {
+	path := filepath.Join(append([]string{a.CompanyDirPath}, components...)...)
+	_, err := os.Stat(path)
+	if err == nil {
+		return pd.Ok()
+	}
+	return pd.NotOk(pd.New(err, pd.FSError, pd.ErrFSFileNotExist))
 }
 
-// /build/
-func (a *AppFS) DirBuildPath() string {
-	return "build"
+// ExistsRoot returns a result based on relative.
+func (a *AppFS) ExistsRoot(components ...string) pd.Result {
+	path := filepath.Join(components...)
+	_, err := a.Root.Stat(path)
+	if err == nil {
+		return pd.Ok()
+	}
+	return pd.NotOk(pd.New(err, pd.FSError, pd.ErrFSRootFileNotExist))
 }
 
-// /build/game
-func (a *AppFS) DirGamePath() string {
-	return filepath.Join(a.DirBuildPath(), "game")
+// ExistsLauncher returns a result based on relative of launcher.
+func (a *AppFS) ExistsLauncher(components ...string) pd.Result {
+	path := filepath.Join(append([]string{a.PathDirApp()}, components...)...)
+	_, err := a.Root.Stat(path)
+	if err == nil {
+		return pd.Ok()
+	}
+	return pd.NotOk(pd.New(err, pd.FSError, pd.ErrFSRootFileNotExist))
 }
 
-// /build/prerelease
-func (a *AppFS) DirPreReleasePath() string {
-	return filepath.Join(a.DirBuildPath(), "prerelease")
-}
+// Save writes a file.
+func (a *AppFS) Save(saveFile string, bytes []byte) pd.Result {
+	file, err := a.Root.Create(saveFile)
+	if err != nil {
+		return pd.NotOk(pd.New(err, pd.FSError, pd.ErrFSRootFileNew))
+	}
 
-// -- files --
+	_, err = file.Write(bytes)
+	if err != nil {
+		return pd.NotOk(pd.New(err, pd.FSError, pd.ErrFSRootFileWrite))
+	}
 
-// /Project-86-Launcher/data.json
-func (a *AppFS) FileDataPath() string {
-	return filepath.Join(a.DirAppPath(), configs.DataFile)
-}
-
-// /Project-86-Launcher/cache.json
-func (a *AppFS) FileCachePath() string {
-	return filepath.Join(a.DirAppPath(), configs.CacheFile)
+	return pd.Ok()
 }

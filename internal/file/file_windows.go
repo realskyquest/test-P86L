@@ -29,18 +29,18 @@ import (
 	"path/filepath"
 )
 
-func GetCompanyPath(extra ...string) (string, *pd.Error) {
+func GetCompanyPath(extra ...string) (pd.Result, string) {
 	appData := os.Getenv("APPDATA")
 	if appData == "" {
-		return "", pd.New(fmt.Errorf("APPDATA not set"), pd.FSError, pd.ErrFSDirInvalid)
+		return pd.Result{Err: pd.New(fmt.Errorf("APPDATA not set"), pd.FSError, pd.ErrFSDirInvalid)}, ""
 	}
 	dataPath := filepath.Join(appData, configs.CompanyName)
 	// Used for testing only!
 	if len(extra) == 1 && extra[0] != "" {
 		dataPath = fmt.Sprintf("%s_%s", dataPath, extra[0])
 	}
-	if err := mkdirAll(dataPath); err != nil {
-		return "", err
+	if result := mkdirAll(dataPath); !result.Ok {
+		return result, ""
 	}
-	return dataPath, nil
+	return pd.Ok(), dataPath
 }

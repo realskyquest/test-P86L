@@ -2,108 +2,94 @@ package file
 
 import (
 	"encoding/json"
-	"errors"
+	"p86l/configs"
 	pd "p86l/internal/debug"
-	"time"
-
-	"github.com/google/go-github/v71/github"
-	"github.com/hajimehoshi/guigui"
-	"github.com/rs/zerolog/log"
+	"path/filepath"
 )
 
-type Data struct {
-	V              int              `json:"v"`
-	WindowX        int              `json:"window_x"`
-	WindowY        int              `json:"window_y"`
-	WindowWidth    int              `json:"window_width"`
-	WindowHeight   int              `json:"window_height"`
-	WindowMaximize bool             `json:"window_maximize"`
-	Locale         string           `json:"locale"`
-	AppScale       int              `json:"app_scale"`
-	ColorMode      guigui.ColorMode `json:"color_mode"`
-	UsePreRelease  bool             `json:"use_pre_release"`
-	GameVersion    string           `json:"game_version"`
+// /Project-86-Launcher/
+func (a *AppFS) PathDirApp() string {
+	return configs.AppName
 }
 
-func (d *Data) Log(dm *pd.Debug) {
-	log := dm.Log()
-
-	log.Info().Any("Translation", d.Locale).Msg("FileManager")
-	log.Info().Any("Scaling", d.AppScale).Msg("FileManager")
-	log.Info().Any("Theme", d.ColorMode).Msg("FileManager")
-	if d.GameVersion == "" {
-		return
-	}
-	log.Info().Any("Use Pre-release", d.UsePreRelease).Msg("FileManager")
-	log.Info().Any("Game Version", d.GameVersion).Msg("FileManager")
+// /build/
+func (a *AppFS) PathDirBuild() string {
+	return "build"
 }
 
-type Cache struct {
-	V         int                       `json:"v"`
-	Repo      *github.RepositoryRelease `json:"repo"`
-	Timestamp time.Time                 `json:"time_stamp"`
-	ExpiresIn time.Duration             `json:"expires_in"`
+// /build/game
+func (a *AppFS) PathDirGame() string {
+	return filepath.Join(a.PathDirBuild(), "game")
 }
 
-func (c *Cache) Log() {
-	log.Info().Any("Changelog", c.Repo.GetBody()).Any("Timestamp", c.Timestamp).Any("ExpiresIn", c.ExpiresIn).Msg("FileManager")
+// /build/prerelease
+func (a *AppFS) PathDirPrerelease() string {
+	return filepath.Join(a.PathDirBuild(), "prerelease")
 }
 
-func (c *Cache) Validate(appDebug *pd.Debug) *pd.Error {
-	if c.Repo == nil {
-		return pd.New(errors.New("repo is empty"), pd.CacheError, pd.ErrCacheInvalid)
-	}
+// -- files --
 
-	if c.Repo.GetBody() == "" {
-		return pd.New(errors.New("body is empty"), pd.CacheError, pd.ErrCacheBodyInvalid)
-	}
+// build/game/Project-86.exe
+func (a *AppFS) PathFileGame() string {
+	return filepath.Join(a.PathDirGame(), "Project-86.exe")
+}
 
-	if c.Repo.GetHTMLURL() == "" {
-		return pd.New(errors.New("URL is empty"), pd.CacheError, pd.ErrCacheURLInvalid)
-	}
-	if len(c.Repo.Assets) < 1 {
-		return pd.New(errors.New("assets are empty"), pd.CacheError, pd.ErrCacheAssetsInvalid)
-	}
+// build/game/Project-86.exe
+func (a *AppFS) PathFilePrerelease() string {
+	return filepath.Join(a.PathDirPrerelease(), "Project-86.exe")
+}
 
-	return nil
+// /Project-86-Launcher/log.txt
+func (a *AppFS) PathFileLog() string {
+	return filepath.Join(a.PathDirApp(), "log.txt")
+}
+
+// /Project-86-Launcher/data.json
+func (a *AppFS) PathFileData() string {
+	return filepath.Join(a.PathDirApp(), configs.DataFile)
+}
+
+// /Project-86-Launcher/cache.json
+func (a *AppFS) PathFileCache() string {
+	return filepath.Join(a.PathDirApp(), configs.CacheFile)
 }
 
 // -- Used to convert data to bytes.
 
-func (a *AppFS) EncodeData(appDebug *pd.Debug, d Data) ([]byte, *pd.Error) {
+func (a *AppFS) EncodeData(appDebug *pd.Debug, d Data) (pd.Result, []byte) {
 	b, err := json.Marshal(d)
 	if err != nil {
-		return nil, pd.New(err, pd.FSError, pd.ErrDataSave)
+		return pd.NotOk(pd.New(err, pd.FSError, pd.ErrDataSave)), nil
 	}
-	return b, nil
+	return pd.Ok(), b
 }
 
-func (a *AppFS) EncodeCache(appDebug *pd.Debug, c Cache) ([]byte, *pd.Error) {
+func (a *AppFS) EncodeCache(appDebug *pd.Debug, c Cache) (pd.Result, []byte) {
 	b, err := json.Marshal(c)
 	if err != nil {
-		return nil, pd.New(err, pd.FSError, pd.ErrDataSave)
+		return pd.NotOk(pd.New(err, pd.FSError, pd.ErrDataSave)), nil
 	}
-	return b, nil
+	return pd.Ok(), b
 }
 
 // -- Used to get data and use it for app.
 
 // Get data.
-func (a *AppFS) DecodeData(appDebug *pd.Debug, b []byte) (Data, *pd.Error) {
+func (a *AppFS) DecodeData(appDebug *pd.Debug, b []byte) (pd.Result, Data) {
 	var d Data
 	err := json.Unmarshal(b, &d)
 	if err != nil {
-		return d, pd.New(err, pd.FSError, pd.ErrDataLoad)
+		return pd.NotOk(pd.New(err, pd.FSError, pd.ErrDataLoad)), d
 	}
-	return d, nil
+	return pd.Ok(), d
 }
 
 // Get cache.
-func (a *AppFS) DecodeCache(appDebug *pd.Debug, b []byte) (Cache, *pd.Error) {
+func (a *AppFS) DecodeCache(appDebug *pd.Debug, b []byte) (pd.Result, Cache) {
 	var c Cache
 	err := json.Unmarshal(b, &c)
 	if err != nil {
-		return c, pd.New(err, pd.FSError, pd.ErrCacheLoad)
+		return pd.NotOk(pd.New(err, pd.FSError, pd.ErrCacheLoad)), c
 	}
-	return c, nil
+	return pd.Ok(), c
 }

@@ -31,18 +31,18 @@ import (
 	"path/filepath"
 )
 
-func GetCompanyPath(extra ...string) (string, *pd.Error) {
+func GetCompanyPath(extra ...string) (pd.Result, string) {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return "", pd.New(err, pd.FSError, pd.ErrFSDirInvalid)
+		return pd.Result{Err: pd.New(err, pd.FSError, pd.ErrFSDirInvalid)}, ""
 	}
 	dataPath := filepath.Join(home, ".local", "share", configs.CompanyName)
 	// Used for testing only!
 	if len(extra) == 1 && extra[0] != "" {
 		dataPath = fmt.Sprintf("%s_%s", dataPath, extra[0])
 	}
-	if err := mkdirAll(dataPath); err != nil {
-		return "", err
+	if result := mkdirAll(dataPath); !result.Ok {
+		return result, ""
 	}
-	return dataPath, nil
+	return pd.Ok(), dataPath
 }

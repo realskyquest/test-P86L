@@ -31,9 +31,9 @@ import (
 
 func setup(t *testing.T) (*pd.Debug, *file.AppFS) {
 	e := &pd.Debug{}
-	a, err := file.NewFS("test")
-	if err != nil {
-		t.Fatalf("%#v", err)
+	result, a := file.NewFS("test")
+	if !result.Ok {
+		t.Fatalf("%s", result.Err.String())
 	}
 
 	return e, a
@@ -53,28 +53,26 @@ func TestSaveFiles(t *testing.T) {
 		ColorMode: guigui.ColorModeDark,
 	}
 
-	b, err := fs.EncodeData(e, exampleData)
-	if err != nil {
-		t.Fatalf("%#v", err)
+	result, b := fs.EncodeData(e, exampleData)
+	if !result.Ok {
+		t.Fatalf("%s", result.Err.String())
 	}
-
-	err = fs.Save(fs.FileDataPath(), b)
-	if err != nil {
-		t.Fatalf("%#v", err)
+	result = fs.Save(fs.PathFileData(), b)
+	if !result.Ok {
+		t.Fatalf("%s", result.Err.String())
 	}
 }
 
 func TestLoadFiles(t *testing.T) {
 	e, fs := setup(t)
 
-	b, err := fs.Load(fs.FileDataPath())
-	if err != nil {
-		t.Fatalf("%#v", err)
+	result, b := fs.Load(fs.PathFileData())
+	if !result.Ok {
+		t.Fatalf("%s", result.Err.String())
 	}
-
-	d, err := fs.DecodeData(e, b)
-	if err != nil {
-		t.Fatalf("%#v", err)
+	result, d := fs.DecodeData(e, b)
+	if !result.Ok {
+		t.Fatalf("%s", result.Err.String())
 	}
 
 	t.Logf("%#v", d)
@@ -83,7 +81,7 @@ func TestLoadFiles(t *testing.T) {
 func TestStatFile(t *testing.T) {
 	_, fs := setup(t)
 
-	if err := fs.IsDirR(fs.FileDataPath()); err != nil {
-		t.Fatalf("%#v", err)
+	if result := fs.ExistsRoot(fs.PathFileData()); !result.Ok {
+		t.Fatalf("%s", result.Err.String())
 	}
 }
