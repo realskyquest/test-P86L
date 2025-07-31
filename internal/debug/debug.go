@@ -24,8 +24,8 @@ package debug
 import (
 	"fmt"
 
+	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 )
 
 type ErrorType string
@@ -53,7 +53,7 @@ type Error struct {
 
 func New(err error, errType ErrorType, code int) *Error {
 	return &Error{
-		err:     err,
+		err:     errors.WithStack(err),
 		errType: errType,
 		code:    code,
 	}
@@ -86,20 +86,20 @@ func (e *Error) String() string {
 	return ""
 }
 
-func (e *Error) LogErr(logStruct, logFunc, manager string) {
-	log.Error().Int("Code", e.code).Any("Type", e.errType).Err((e.err)).Str(logStruct, logFunc).Msg(manager)
+func (e *Error) LogErr(log *zerolog.Logger, logStruct, logFunc, manager string) {
+	log.Error().Int("Code", e.code).Any("Type", e.errType).Err(e.err).Str(logStruct, logFunc).Msg(manager)
 }
 
-func (e *Error) LogErrStack(logStruct, logFunc, manager string) {
-	log.Error().Stack().Int("Code", e.code).Any("Type", e.errType).Err((e.err)).Str(logStruct, logFunc).Msg(manager)
+func (e *Error) LogErrStack(log *zerolog.Logger, logStruct, logFunc, manager string) {
+	log.Error().Stack().Int("Code", e.code).Any("Type", e.errType).Err(e.err).Str(logStruct, logFunc).Msg(manager)
 }
 
-func (e *Error) LogWarn(logStruct, logFunc, manager string) {
-	log.Warn().Int("Code", e.code).Any("Type", e.errType).Err((e.err)).Str(logStruct, logFunc).Msg(manager)
+func (e *Error) LogWarn(log *zerolog.Logger, logStruct, logFunc, manager string) {
+	log.Warn().Int("Code", e.code).Any("Type", e.errType).Err(e.err).Str(logStruct, logFunc).Msg(manager)
 }
 
-func (e *Error) LogWarnStack(logStruct, logFunc, manager string) {
-	log.Warn().Stack().Int("Code", e.code).Any("Type", e.errType).Err((e.err)).Str(logStruct, logFunc).Msg(manager)
+func (e *Error) LogWarnStack(log *zerolog.Logger, logStruct, logFunc, manager string) {
+	log.Warn().Stack().Int("Code", e.code).Any("Type", e.errType).Err(e.err).Str(logStruct, logFunc).Msg(manager)
 }
 
 // -- ErrorManager --
@@ -127,11 +127,15 @@ func (d *Debug) SetLog(logger *zerolog.Logger) {
 }
 
 func (d *Debug) SetToast(err *Error, manager string) {
-	err.LogWarnStack("Debug", "SetToast", manager)
+	if err != nil {
+		err.LogWarnStack(d.log, "Debug", "SetToast", manager)
+	}
 	d.toast = err
 }
 
 func (d *Debug) SetPopup(err *Error, manager string) {
-	err.LogWarnStack("Debug", "SetPopup", manager)
+	if err != nil {
+		err.LogWarnStack(d.log, "Debug", "SetPopup", manager)
+	}
 	d.popup = err
 }
