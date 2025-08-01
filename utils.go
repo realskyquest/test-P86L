@@ -35,37 +35,41 @@ import (
 	"golang.org/x/text/language"
 )
 
-func LoadB(am *AppModel, context *guigui.Context, model *Model, loadType string) *pd.Error {
+func LoadB(am *AppModel, context *guigui.Context, model *Model, loadType string) pd.Result {
 	dm := am.Debug()
 	log := dm.Log()
 	fs := am.FileSystem()
 
 	switch loadType {
 	case "data":
-		if err := fs.IsDirR(fs.FileDataPath()); err != nil {
+		if result := fs.ExistsRoot(fs.PathFileData()); !result.Ok {
 			log.Info().Str("Data", "data not found, creating data...").Str("utils", "loadB").Msg(pd.FileManager)
 			d := NewData()
 			d.Log(dm)
 			model.data.file = d
-			return model.data.Save(am)
+			result := model.data.Save(am)
+			if !result.Ok {
+				return result
+			}
+			return pd.Ok()
 		}
 	case "cache":
-		if err := fs.IsDirR(fs.FileCachePath()); err != nil {
+		if result := fs.ExistsRoot(fs.PathFileCache()); !result.Ok {
 			log.Info().Str("Cache", "cache not found").Str("utils", "loadB").Msg(pd.FileManager)
-			return nil
+			return pd.Ok()
 		}
 	}
 
 	switch loadType {
 	case "data":
-		d, err := LoadData(am)
-		if err != nil {
-			return err
+		result, d := LoadData(am)
+		if !result.Ok {
+			return result
 		}
 
 		tag, rErr := language.Parse(d.Locale)
 		if rErr != nil {
-			return pd.New(rErr, pd.DataError, pd.ErrDataLocaleInvalid)
+			return pd.NotOk(pd.New(rErr, pd.DataError, pd.ErrDataLocaleInvalid))
 		}
 		model.data.SetPosition(d.WindowX, d.WindowY)
 		model.data.SetSize(d.WindowWidth, d.WindowHeight)
@@ -76,22 +80,22 @@ func LoadB(am *AppModel, context *guigui.Context, model *Model, loadType string)
 		model.data.SetUsePreRelease(dm, d.UsePreRelease)
 		return model.data.SetGameVersion(dm, d.GameVersion)
 	case "cache":
-		c, err := LoadCache(am)
-		if err != nil {
-			return err
+		result, c := LoadCache(am)
+		if !result.Ok {
+			return result
 		}
-		if err := c.Validate(dm); err == nil {
+		if result := c.Validate(dm); result.Ok {
 			model.cache.valid = true
 		}
 		model.cache.file = *c
 	}
-	return nil
+	return pd.Ok()
 }
 
 func OpenBrowser(dm *pd.Debug, url string) {
 	dm.Log().Info().Str("Url", url).Msg("OpenBrowser")
 	if err := browser.OpenURL(url); err != nil {
-		dm.SetPopup(pd.New(err, pd.AppError, pd.ErrBrowserOpen))
+		dm.SetPopup(pd.New(err, pd.AppError, pd.ErrBrowserOpen), pd.FileManager)
 	}
 }
 
@@ -121,86 +125,82 @@ func IsValidGameFile(filename string) bool {
 		!strings.Contains(filename, "dev")
 }
 
-func CheckNewerVersion(currentVersion, newVersion string) (bool, *pd.Error) {
+func CheckNewerVersion(currentVersion, newVersion string) (pd.Result, bool) {
 	current, err := version.NewVersion(currentVersion)
 	if err != nil {
-		return false, pd.New(fmt.Errorf("invalid current version: %w", err), pd.AppError, pd.ErrGameVersionInvalid)
+		return pd.NotOk(pd.New(fmt.Errorf("invalid current version: %w", err), pd.AppError, pd.ErrGameVersionInvalid)), false
 	}
 
 	newer, err := version.NewVersion(newVersion)
 	if err != nil {
-		return false, pd.New(fmt.Errorf("invalid new version: %w", err), pd.AppError, pd.ErrGameVersionInvalid)
+		return pd.NotOk(pd.New(fmt.Errorf("invalid new version: %w", err), pd.AppError, pd.ErrGameVersionInvalid)), false
 	}
 
-	return newer.GreaterThan(current), nil
+	return pd.Ok(), newer.GreaterThan(current)
 }
 
 // -- Funcs for loading and saving --
 
-func LoadData(am *AppModel) (*file.Data, *pd.Error) {
+func LoadData(am *AppModel) (pd.Result, *file.Data) {
 	dm := am.Debug()
 	fs := am.FileSystem()
 
-	b, err := fs.Load(fs.FileDataPath())
-	if err != nil {
-		return nil, err
+	result, b := fs.Load(fs.PathFileData())
+	if !result.Ok {
+		return result, nil
+	}
+	result, d := fs.DecodeData(dm, b)
+	if !result.Ok {
+		return result, nil
 	}
 
-	d, err := fs.DecodeData(dm, b)
-	if err != nil {
-		return nil, err
-	}
-
-	return &d, nil
+	return pd.Ok(), &d
 }
 
-func LoadCache(am *AppModel) (*file.Cache, *pd.Error) {
+func LoadCache(am *AppModel) (pd.Result, *file.Cache) {
 	dm := am.Debug()
 	fs := am.FileSystem()
 
-	b, err := fs.Load(fs.FileCachePath())
-	if err != nil {
-		return nil, err
+	result, b := fs.Load(fs.PathFileCache())
+	if !result.Ok {
+		return result, nil
+	}
+	result, c := fs.DecodeCache(dm, b)
+	if !result.Ok {
+		return result, nil
 	}
 
-	c, err := fs.DecodeCache(dm, b)
-	if err != nil {
-		return nil, err
-	}
-
-	return &c, nil
+	return pd.Ok(), &c
 }
 
-func SaveData(am *AppModel, d file.Data) *pd.Error {
+func SaveData(am *AppModel, d file.Data) pd.Result {
 	dm := am.Debug()
 	fs := am.FileSystem()
 
-	b, err := fs.EncodeData(dm, d)
-	if err != nil {
-		return err
+	result, b := fs.EncodeData(dm, d)
+	if !result.Ok {
+		return result
+	}
+	result = fs.Save(fs.PathFileData(), b)
+	if !result.Ok {
+		return result
 	}
 
-	err = fs.Save(fs.FileDataPath(), b)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return pd.Ok()
 }
 
-func SaveCache(am *AppModel, c file.Cache) *pd.Error {
+func SaveCache(am *AppModel, c file.Cache) pd.Result {
 	dm := am.Debug()
 	fs := am.FileSystem()
 
-	b, err := fs.EncodeCache(dm, c)
-	if err != nil {
-		return err
+	result, b := fs.EncodeCache(dm, c)
+	if !result.Ok {
+		return result
+	}
+	result = fs.Save(fs.PathFileCache(), b)
+	if !result.Ok {
+		return result
 	}
 
-	err = fs.Save(fs.FileCachePath(), b)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return pd.Ok()
 }
