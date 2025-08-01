@@ -79,6 +79,16 @@ func (e *Error) IsCode(code int) bool {
 	return e.code == code
 }
 
+func (e *Error) Equal(other *Error) bool {
+	if e == nil || other == nil {
+		return e == nil && other == nil
+	}
+	if e.err.Error() != other.err.Error() {
+		return false
+	}
+	return e.errType == other.errType && e.code == other.code
+}
+
 func (e *Error) String() string {
 	if e != nil {
 		return fmt.Sprintf("Code: ( %d ), Type: ( %s ), Err: ( %s )", e.code, string(e.errType), e.err.Error())
@@ -105,9 +115,11 @@ func (e *Error) LogWarnStack(log *zerolog.Logger, logStruct, logFunc, manager st
 // -- ErrorManager --
 
 type Debug struct {
-	log   *zerolog.Logger
-	toast *Error
-	popup *Error
+	log             *zerolog.Logger
+	toast           *Error
+	lastLoggedToast *Error
+	popup           *Error
+	lastLoggedPopup *Error
 }
 
 func (d *Debug) Log() *zerolog.Logger {
@@ -127,15 +139,27 @@ func (d *Debug) SetLog(logger *zerolog.Logger) {
 }
 
 func (d *Debug) SetToast(err *Error, manager string) {
-	if err != nil {
-		err.LogWarnStack(d.log, "Debug", "SetToast", manager)
+	if err == nil {
+		return
+	}
+	if d.toast == nil || !d.toast.Equal(err) {
+		if d.lastLoggedToast == nil || !d.lastLoggedToast.Equal(err) {
+			err.LogWarnStack(d.log, "Debug", "SetToast", manager)
+			d.lastLoggedToast = err
+		}
 	}
 	d.toast = err
 }
 
 func (d *Debug) SetPopup(err *Error, manager string) {
-	if err != nil {
-		err.LogWarnStack(d.log, "Debug", "SetPopup", manager)
+	if err == nil {
+		return
+	}
+	if d.popup == nil || !d.popup.Equal(err) {
+		if d.lastLoggedPopup == nil || !d.lastLoggedPopup.Equal(err) {
+			err.LogWarnStack(d.log, "Debug", "SetPopup", manager)
+			d.lastLoggedPopup = err
+		}
 	}
 	d.popup = err
 }

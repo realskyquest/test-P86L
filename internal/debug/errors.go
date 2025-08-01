@@ -64,6 +64,7 @@ const (
 	ErrFSNewFileInvalid
 	ErrFSFileWrite
 	ErrFSFileNotExist
+	ErrFSFilePerm
 
 	// -- root --
 
