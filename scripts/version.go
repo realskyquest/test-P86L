@@ -9,11 +9,11 @@ import (
 )
 
 type Version struct {
-	Zero       int
-	Major      int
-	MinorPatch int
-	Build      int
-	Version    string
+	Major   int
+	Minor   int
+	Patch   int
+	Build   int
+	Version string
 }
 
 func parseVersion(versionStr string, commitCount int) Version {
@@ -30,26 +30,26 @@ func parseVersion(versionStr string, commitCount int) Version {
 	minorPatch, _ := strconv.Atoi(parts[2])
 
 	return Version{
-		Zero:       zero,
-		Major:      major,
-		MinorPatch: minorPatch,
-		Build:      commitCount,
-		Version:    cleanVersion,
+		Major:   zero,
+		Minor:   major,
+		Patch:   minorPatch,
+		Build:   commitCount,
+		Version: cleanVersion,
 	}
 }
 
 const versionTemplate = `{
     "FixedFileInfo": {
         "FileVersion": {
-            "Major": {{.Zero}},
-            "Minor": {{.Major}},
-            "Patch": {{.MinorPatch}},
+            "Major": {{.Major}},
+            "Minor": {{.Minor}},
+            "Patch": {{.Patch}},
             "Build": {{.Build}}
         },
         "ProductVersion": {
-            "Major": {{.Zero}},
-            "Minor": {{.Major}},
-            "Patch": {{.MinorPatch}},
+            "Major": {{.Major}},
+            "Minor": {{.Minor}},
+            "Patch": {{.Patch}},
             "Build": {{.Build}}
         },
         "FileFlagsMask": "3f",
