@@ -65,166 +65,155 @@ func GetPreRelease(am *AppModel) (*github.RepositoryRelease, error) {
 	return nil, fmt.Errorf("no pre-releases found")
 }
 
-func DownloadGame(model *Model, filename, src string, preRelease bool) *pd.Error {
+func DownloadGame(model *Model, filename, src string, preRelease bool) pd.Result {
 	am := model.App()
-	dm := am.Debug()
 	fs := am.FileSystem()
-
-	var game string
+	gameType := "game"
 	if preRelease {
-		game = "pregame"
-	} else {
-		game = "game"
+		gameType = "pregame"
 	}
-	gameZip := fmt.Sprintf("%s.zip", game)
 
 	model.SetProgress("Downloading...")
-
-	err := DownloadFile(model, filename, src, gameZip)
-	if err != nil {
+	zipName := fmt.Sprintf("%s.zip", gameType)
+	result := DownloadFile(model, filename, src, zipName)
+	if !result.Ok {
 		model.SetProgress("")
-		return err
+		return result
 	}
 
-	if fs.IsDirR(fs.DirGamePath()) == nil {
-		model.SetProgress("Removing old files...")
-
-		rErr := os.RemoveAll(filepath.Join(fs.CompanyDirPath, "build", game))
-		if rErr != nil {
-			model.SetProgress("")
-			return pd.New(rErr, pd.FSError, pd.ErrFSDirRemove)
-		}
+	model.SetProgress("Removing old files...")
+	gameDir := filepath.Join(fs.CompanyDirPath, "build", gameType)
+	if err := os.RemoveAll(gameDir); err != nil {
+		model.SetProgress("")
+		return pd.NotOk(pd.New(err, pd.FSError, pd.ErrFSDirRemove))
 	}
 
 	model.SetProgress("Extracting...")
-
-	err = unzip(dm, filepath.Join(fs.CompanyDirPath, gameZip), filepath.Join(fs.CompanyDirPath, "build", game))
-	if err != nil {
+	srcPath := filepath.Join(fs.CompanyDirPath, zipName)
+	if result := unzipToDir(model, srcPath, gameDir); !result.Ok {
 		model.SetProgress("")
-		return err
+		return result
 	}
 
 	model.SetProgress("Cleaning...")
-
-	rErr := fs.Root.Remove(gameZip)
-	if rErr != nil {
+	if err := fs.Root.Remove(zipName); err != nil {
 		model.SetProgress("")
-		return pd.New(rErr, pd.FSError, pd.ErrFSRootFileRemove)
+		return pd.NotOk(pd.New(err, pd.FSError, pd.ErrFSRootFileRemove))
 	}
 
 	model.SetProgress("")
-
-	return nil
+	return pd.Ok()
 }
 
-func DownloadLauncher() {
-	// TODO:
-}
-
-func DownloadFile(model *Model, filename, src, dest string) *pd.Error {
+func DownloadFile(model *Model, filename, src, dest string) pd.Result {
 	am := model.App()
-	dm := am.Debug()
 	fs := am.FileSystem()
+	dm := am.Debug()
 
-	var resumePos int64 = 0
+	// Try to get existing file size for resume
+	resumePos := int64(0)
 	if info, err := fs.Root.Stat(dest); err == nil {
 		resumePos = info.Size()
 	}
 
+	// Verify if resume is possible
 	if resumePos > 0 {
-		// Make a HEAD request to get the file size without downloading.
 		headReq, err := http.NewRequest("HEAD", src, nil)
 		if err != nil {
-			return pd.New(err, pd.NetworkError, pd.ErrNetworkDownloadRequest)
+			return pd.NotOk(pd.New(err, pd.NetworkError, pd.ErrNetworkDownloadRequest))
 		}
 
 		client := &http.Client{}
-		headResp, err := client.Do(headReq)
+		resp, err := client.Do(headReq)
 		if err != nil {
-			return pd.New(err, pd.NetworkError, pd.ErrNetworkDownloadRequest)
+			return pd.NotOk(pd.New(err, pd.NetworkError, pd.ErrNetworkDownloadRequest))
 		}
-		err = headResp.Body.Close()
-		if err != nil {
-			return pd.New(err, pd.NetworkError, pd.ErrNetworkDownloadRequest)
+		resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			return pd.NotOk(pd.New(fmt.Errorf("bad HEAD status: %s", resp.Status), pd.NetworkError, pd.ErrNetworkStatusNotOk))
 		}
 
-		if headResp.StatusCode == http.StatusOK {
-			contentLength := headResp.ContentLength
-			// If the file size matches, skip download.
-			if contentLength > 0 && resumePos == contentLength {
-				// File is already fully downloaded.
-				return nil
-			}
+		// File is already complete
+		if resp.ContentLength > 0 && resumePos == resp.ContentLength {
+			return pd.Ok()
+		}
+
+		// Server doesn't support resume
+		if resp.Header.Get("Accept-Ranges") != "bytes" {
+			resumePos = 0 // Force full download
 		}
 	}
 
+	// Open file for writing
 	var out io.WriteCloser
 	var err error
 	if resumePos > 0 {
 		out, err = fs.Root.OpenFile(dest, os.O_WRONLY|os.O_APPEND, 0644)
 	} else {
+		// For full download, remove existing file if it exists
+		if err := fs.Root.Remove(dest); err != nil && !os.IsNotExist(err) {
+			return pd.NotOk(pd.New(err, pd.FSError, pd.ErrFSRootFileRemove))
+		}
 		out, err = fs.Root.Create(dest)
 	}
 	if err != nil {
-		return pd.New(err, pd.FSError, pd.ErrFSRootFileNew)
+		return pd.NotOk(pd.New(err, pd.FSError, pd.ErrFSRootFileNew))
 	}
 	defer func() {
-		err := out.Close()
-		if err != nil {
-			dm.SetToast(pd.New(err, pd.FSError, pd.ErrFSRootFileClose))
+		if cerr := out.Close(); cerr != nil {
+			dm.SetToast(pd.New(cerr, pd.FSError, pd.ErrFSRootFileClose), pd.FileManager)
 		}
 	}()
 
+	// Create request
 	req, err := http.NewRequest("GET", src, nil)
 	if err != nil {
-		return pd.New(err, pd.NetworkError, pd.ErrNetworkDownloadRequest)
+		return pd.NotOk(pd.New(err, pd.NetworkError, pd.ErrNetworkDownloadRequest))
 	}
-
 	if resumePos > 0 {
 		req.Header.Set("Range", fmt.Sprintf("bytes=%d-", resumePos))
 	}
 
+	// Execute request
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		return pd.New(err, pd.NetworkError, pd.ErrNetworkDownloadRequest)
+		return pd.NotOk(pd.New(err, pd.NetworkError, pd.ErrNetworkDownloadRequest))
 	}
 	defer func() {
-		err := resp.Body.Close()
-		if err != nil {
-			dm.SetToast(pd.New(err, pd.FSError, pd.ErrFSRootFileClose))
+		if cerr := resp.Body.Close(); cerr != nil {
+			dm.SetToast(pd.New(cerr, pd.FSError, pd.ErrFSRootFileClose), pd.FileManager)
 		}
 	}()
 
+	// Validate status
 	expectedStatus := http.StatusOK
 	if resumePos > 0 {
 		expectedStatus = http.StatusPartialContent
 	}
-
 	if resp.StatusCode != expectedStatus {
-		if resumePos > 0 && resp.StatusCode != http.StatusPartialContent {
-			err := out.Close()
-			if err != nil {
-				return pd.New(err, pd.FSError, pd.ErrFSRootFileClose)
-			}
-			return DownloadFileFromScratch(model, filename, src, dest)
-		}
-		return pd.New(fmt.Errorf("bad status: %s", resp.Status), pd.NetworkError, pd.ErrNetworkStatusNotOk)
+		return pd.NotOk(pd.New(
+			fmt.Errorf("unexpected status: %s (expected %d)", resp.Status, expectedStatus),
+			pd.NetworkError,
+			pd.ErrNetworkStatusNotOk,
+		))
 	}
 
-	var totalSize int64
+	// Determine total size
+	totalSize := resp.ContentLength
 	if resumePos > 0 {
-		if contentRange := resp.Header.Get("Content-Range"); contentRange != "" {
-			if parts := strings.Split(contentRange, "/"); len(parts) == 2 {
+		if cr := resp.Header.Get("Content-Range"); cr != "" {
+			parts := strings.Split(cr, "/")
+			if len(parts) == 2 {
 				if size, err := strconv.ParseInt(parts[1], 10, 64); err == nil {
 					totalSize = size
 				}
 			}
 		}
-	} else {
-		totalSize = resp.ContentLength
 	}
 
+	// Set up progress tracking
 	p := &ProgressTracker{
 		model:       model,
 		filename:    filename,
@@ -233,167 +222,83 @@ func DownloadFile(model *Model, filename, src, dest string) *pd.Error {
 		startTime:   time.Now(),
 	}
 
-	_, err = io.Copy(out, io.TeeReader(resp.Body, p))
-	if err != nil {
-		return pd.New(err, pd.FSError, pd.ErrFSRootFileWrite)
+	// Stream to file
+	if _, err := io.Copy(out, io.TeeReader(resp.Body, p)); err != nil {
+		// Clean up partial file on error
+		if resumePos == 0 {
+			_ = fs.Root.Remove(dest)
+		}
+		return pd.NotOk(pd.New(err, pd.FSError, pd.ErrFSRootFileWrite))
 	}
 
-	return nil
+	return pd.Ok()
 }
 
-func DownloadFileFromScratch(model *Model, filename, src, dest string) *pd.Error {
-	am := model.App()
-	dm := am.Debug()
-	fs := am.FileSystem()
-
-	// Remove existing file
-	err := fs.Root.Remove(dest)
-	if err != nil {
-		return pd.New(err, pd.FSError, pd.ErrFSRootFileRemove)
-	}
-
-	// Create new file
-	out, err := fs.Root.Create(dest)
-	if err != nil {
-		return pd.New(err, pd.FSError, pd.ErrFSRootFileNew)
-	}
-	defer func() {
-		err := out.Close()
-		if err != nil {
-			dm.SetToast(pd.New(err, pd.FSError, pd.ErrFSRootFileClose))
-		}
-	}()
-
-	resp, err := http.Get(src)
-	if err != nil {
-		return pd.New(err, pd.NetworkError, pd.ErrNetworkDownloadRequest)
-	}
-	defer func() {
-		err := resp.Body.Close()
-		if err != nil {
-			dm.SetToast(pd.New(err, pd.FSError, pd.ErrFSRootFileClose))
-		}
-	}()
-
-	if resp.StatusCode != http.StatusOK {
-		return pd.New(fmt.Errorf("bad status: %s", resp.Status), pd.NetworkError, pd.ErrNetworkStatusNotOk)
-	}
-
-	p := &ProgressTracker{
-		model:       model,
-		filename:    filename,
-		totalSize:   resp.ContentLength,
-		currentSize: 0,
-		startTime:   time.Now(),
-	}
-
-	_, err = io.Copy(out, io.TeeReader(resp.Body, p))
-	if err != nil {
-		err := fs.Root.Remove(dest)
-		if err != nil {
-			return pd.New(err, pd.FSError, pd.ErrFSRootFileRemove)
-		}
-		return pd.New(err, pd.FSError, pd.ErrFSRootFileWrite)
-	}
-
-	return nil
-}
-
-func unzip(dm *pd.Debug, src, dest string) *pd.Error {
+func unzipToDir(model *Model, src, dest string) pd.Result {
+	dm := model.App().Debug()
 	r, err := zip.OpenReader(src)
 	if err != nil {
-		return pd.New(err, pd.FSError, pd.ErrFSRootFileRead)
+		return pd.NotOk(pd.New(err, pd.FSError, pd.ErrFSRootFileRead))
 	}
 	defer func() {
-		err := r.Close()
-		if err != nil {
-			dm.SetToast(pd.New(err, pd.FSError, pd.ErrFSRootFileClose))
+		if cerr := r.Close(); cerr != nil {
+			dm.SetToast(pd.New(cerr, pd.FSError, pd.ErrFSRootFileClose), pd.FileManager)
 		}
 	}()
 
 	if err := os.MkdirAll(dest, 0755); err != nil {
-		return pd.New(err, pd.FSError, pd.ErrFSDirNew)
-	}
-
-	// Find common root directory if it exists
-	var rootDir string
-	if len(r.File) > 0 {
-		firstPath := r.File[0].Name
-		rootDir = strings.Split(firstPath, "/")[0] + "/"
-
-		// Verify all files have this common root
-		for _, f := range r.File {
-			if !strings.HasPrefix(f.Name, rootDir) {
-				rootDir = "" // No common root
-				break
-			}
-		}
-	}
-
-	extractAndWriteFile := func(f *zip.File) *pd.Error {
-		// Skip the root directory itself
-		if f.Name == rootDir || f.Name == strings.TrimSuffix(rootDir, "/") {
-			return nil
-		}
-
-		rc, err := f.Open()
-		if err != nil {
-			return pd.New(err, pd.FSError, pd.ErrFSFileInvalid)
-		}
-		defer func() {
-			err := rc.Close()
-			if err != nil {
-				dm.SetToast(pd.New(err, pd.FSError, pd.ErrFSRootFileClose))
-			}
-		}()
-
-		// Strip the root directory from the path
-		relPath := f.Name
-		if rootDir != "" {
-			relPath = strings.TrimPrefix(f.Name, rootDir)
-		}
-
-		path := filepath.Join(dest, relPath)
-
-		// Check for ZipSlip vulnerability.
-		if !strings.HasPrefix(path, filepath.Clean(dest)+string(os.PathSeparator)) {
-			return pd.New(fmt.Errorf("illegal file path: %s", path), pd.FSError, pd.ErrFSFileInvalid)
-		}
-
-		if f.FileInfo().IsDir() {
-			if err := os.MkdirAll(path, f.Mode()); err != nil {
-				return pd.New(err, pd.FSError, pd.ErrFSDirNew)
-			}
-		} else {
-			if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-				return pd.New(err, pd.FSError, pd.ErrFSDirNew)
-			}
-
-			fi, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, f.Mode())
-			if err != nil {
-				return pd.New(err, pd.FSError, pd.ErrFSFileInvalid)
-			}
-			defer func() {
-				err := fi.Close()
-				if err != nil {
-					dm.SetToast(pd.New(err, pd.FSError, pd.ErrFSRootFileClose))
-				}
-			}()
-
-			_, err = io.Copy(fi, rc)
-			if err != nil {
-				return pd.New(err, pd.FSError, pd.ErrFSFileWrite)
-			}
-		}
-		return nil
+		return pd.NotOk(pd.New(err, pd.FSError, pd.ErrFSDirNew))
 	}
 
 	for _, f := range r.File {
-		err := extractAndWriteFile(f)
-		if err != nil {
-			return err
+		if result := extractFile(f, dest, dm); !result.Ok {
+			return result
 		}
 	}
+	return pd.Ok()
+}
 
-	return nil
+func extractFile(f *zip.File, dest string, dm *pd.Debug) pd.Result {
+	if f.FileInfo().IsDir() {
+		return pd.Ok()
+	}
+
+	rc, err := f.Open()
+	if err != nil {
+		return pd.NotOk(pd.New(err, pd.FSError, pd.ErrFSFileInvalid))
+	}
+	defer func() {
+		if cerr := rc.Close(); cerr != nil {
+			dm.SetToast(pd.New(cerr, pd.FSError, pd.ErrFSRootFileClose), pd.FileManager)
+		}
+	}()
+
+	targetPath := filepath.Join(dest, f.Name)
+	if !strings.HasPrefix(targetPath, filepath.Clean(dest)+string(os.PathSeparator)) {
+		return pd.NotOk(pd.New(fmt.Errorf("illegal path: %s", f.Name), pd.FSError, pd.ErrFSFileInvalid))
+	}
+
+	if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
+		return pd.NotOk(pd.New(err, pd.FSError, pd.ErrFSDirNew))
+	}
+
+	out, err := os.Create(targetPath)
+	if err != nil {
+		return pd.NotOk(pd.New(err, pd.FSError, pd.ErrFSFileInvalid))
+	}
+	defer func() {
+		if cerr := out.Close(); cerr != nil {
+			dm.SetToast(pd.New(cerr, pd.FSError, pd.ErrFSRootFileClose), pd.FileManager)
+		}
+	}()
+
+	if _, err := io.Copy(out, rc); err != nil {
+		return pd.NotOk(pd.New(err, pd.FSError, pd.ErrFSFileWrite))
+	}
+
+	if err := os.Chmod(targetPath, f.Mode()); err != nil {
+		return pd.NotOk(pd.New(err, pd.FSError, pd.ErrFSFilePerm))
+	}
+
+	return pd.Ok()
 }
