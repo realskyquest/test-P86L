@@ -50,7 +50,7 @@ type AppModel struct {
 	i18nLocalizer *i18n.Localizer
 	translator    *translator.Translator
 
-	err *pd.Error
+	result pd.Result
 }
 
 // License returns the license text for the application.
@@ -168,19 +168,19 @@ func (a *AppModel) Translate(text, targetLang string) string {
 }
 
 // Error returns the last error encountered in the application.
-func (a *AppModel) Error() *pd.Error {
-	return a.err
+func (a *AppModel) Error() pd.Result {
+	return a.result
 }
 
 // -- Setters for AppModel --
 
-func (a *AppModel) SetFileSystem() *pd.Error {
-	fs, err := file.NewFS()
-	if err != nil {
-		return err
+func (a *AppModel) SetFileSystem() pd.Result {
+	result, fs := file.NewFS()
+	if !result.Ok {
+		return result
 	}
 	a.fs = fs
-	return nil
+	return pd.Ok()
 }
 
 // SetPlainVersion sets the plain version of the application.
@@ -189,13 +189,13 @@ func (a *AppModel) SetPlainVersion(value string) {
 }
 
 // SetVersion sets the version of the application.
-func (a *AppModel) SetVersion(value string) *pd.Error {
+func (a *AppModel) SetVersion(value string) pd.Result {
 	v, err := version.NewVersion(value)
 	if err != nil {
-		return pd.New(err, pd.AppError, pd.ErrLauncherVersionInvalid)
+		return pd.NotOk(pd.New(err, pd.AppError, pd.ErrLauncherVersionInvalid))
 	}
 	a.version = v
-	return nil
+	return pd.Ok()
 }
 
 // SetLogsEnabled sets whether logging is enabled in the application.
@@ -224,6 +224,6 @@ func (a *AppModel) SetLocale(locale string) {
 }
 
 // Set error for app.
-func (a *AppModel) SetError(err *pd.Error) {
-	a.err = err
+func (a *AppModel) SetError(result pd.Result) {
+	a.result = result
 }

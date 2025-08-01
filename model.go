@@ -21,13 +21,16 @@
 
 package p86l
 
+import "github.com/google/go-github/v71/github"
+
 type Model struct {
 	mode     string
 	progress string
 
-	app   AppModel
-	data  DataModel
-	cache CacheModel
+	ratelimit RatelimitModel
+	app       AppModel
+	data      DataModel
+	cache     CacheModel
 }
 
 func (m *Model) Mode() string {
@@ -55,10 +58,35 @@ func (m *Model) App() *AppModel {
 	return &m.app
 }
 
+func (m *Model) Ratelimit() *RatelimitModel {
+	return &m.ratelimit
+}
+
 func (m *Model) Data() *DataModel {
 	return &m.data
 }
 
 func (m *Model) Cache() *CacheModel {
 	return &m.cache
+}
+
+type RatelimitModel struct {
+	progress bool
+	limit    *github.RateLimits
+}
+
+func (r *RatelimitModel) Progress() bool {
+	return r.progress
+}
+
+func (r *RatelimitModel) Limit() *github.RateLimits {
+	return r.limit
+}
+
+func (r *RatelimitModel) SetProgress(value bool) {
+	r.progress = value
+}
+
+func (r *RatelimitModel) SetLimit(value *github.RateLimits) {
+	r.limit = value
 }

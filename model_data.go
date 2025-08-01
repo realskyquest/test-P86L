@@ -124,34 +124,41 @@ func (d *DataModel) SetColorMode(dm *pd.Debug, context *guigui.Context, mode gui
 	context.SetColorMode(mode)
 }
 
-func (d *DataModel) SetUsePreRelease(dm *pd.Debug, value bool) *pd.Error {
+func (d *DataModel) SetUsePreRelease(dm *pd.Debug, value bool) {
 	dm.Log().Info().Any("Pre-release", value).Str("DateModel", "SetUsePreRelease").Msg(pd.FileManager)
 	d.file.UsePreRelease = value
-	return nil
 }
 
-func (d *DataModel) SetGameVersion(dm *pd.Debug, ver string) *pd.Error {
+func (d *DataModel) SetGameVersion(dm *pd.Debug, ver string) pd.Result {
 	if ver == "" {
-		return nil
+		return pd.Ok()
 	}
 
 	_, err := version.NewVersion(ver)
 	if err != nil {
-		return pd.New(err, pd.AppError, pd.ErrGameVersionInvalid)
+		return pd.NotOk(pd.New(err, pd.AppError, pd.ErrGameVersionInvalid))
 	}
 
 	dm.Log().Info().Any("Game Version", ver).Str("DateModel", "SetGameVersion").Msg(pd.FileManager)
 	d.file.GameVersion = ver
-	return nil
+	return pd.Ok()
 }
 
-func (d *DataModel) SetFile(am *AppModel, file file.Data) *pd.Error {
+func (d *DataModel) SetFile(am *AppModel, file file.Data) pd.Result {
 	am.Debug().Log().Info().Str("DataModel", "SetFile").Msg(pd.FileManager)
 	d.file = file
-	return d.Save(am)
+	result := d.Save(am)
+	if !result.Ok {
+		return result
+	}
+	return pd.Ok()
 }
 
-func (d *DataModel) Save(am *AppModel) *pd.Error {
+func (d *DataModel) Save(am *AppModel) pd.Result {
 	am.Debug().Log().Info().Str("DataModel", "Save").Msg(pd.FileManager)
-	return SaveData(am, d.file)
+	result := SaveData(am, d.file)
+	if !result.Ok {
+		return result
+	}
+	return pd.Ok()
 }

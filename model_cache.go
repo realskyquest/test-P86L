@@ -62,14 +62,14 @@ func (c *CacheModel) SetValid(value bool) {
 	c.valid = value
 }
 
-func (c *CacheModel) SetRepo(am *AppModel, repo *github.RepositoryRelease, locale string) *pd.Error {
+func (c *CacheModel) SetRepo(am *AppModel, repo *github.RepositoryRelease, locale string) pd.Result {
 	dm := am.Debug()
 
 	c.file.V = 0
 	c.file.Repo = repo
 	c.file.Timestamp = time.Now()
 	c.file.ExpiresIn = time.Hour
-	if err := c.file.Validate(dm); err != nil {
+	if result := c.file.Validate(dm); !result.Ok {
 		c.valid = false
 	} else {
 		c.valid = true
