@@ -27,6 +27,7 @@ import (
 	"os"
 	"p86l/app"
 	"p86l/configs"
+	pd "p86l/internal/debug"
 	"path/filepath"
 	"strings"
 
@@ -37,40 +38,34 @@ import (
 
 var version = "dev"
 
-func init() {
+func main() {
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
 	zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
-}
 
-func main() {
-	newRoot, err := app.NewRoot(version)
-	if err != nil {
-		err.LogErrStack("main", "NewRoot")
-		os.Exit(1)
-	}
+	result, newRoot := app.NewRoot(version)
 
 	am := newRoot.Model().App()
 	dm := am.Debug()
 	fs := am.FileSystem()
 
 	if version == "dev" {
+		newLog := zerolog.New(os.Stdout).With().Timestamp().Logger()
+		newLog = newLog.Output(zerolog.ConsoleWriter{
+			Out:        os.Stderr,
+			TimeFormat: "2006/01/02 15:04:05",
+		})
+		dm.SetLog(&newLog)
+
 		for _, token := range strings.Split(os.Getenv("P86L_DEBUG"), ",") {
 			switch token {
 			case "log":
-				newLog := zerolog.New(os.Stdout).With().Timestamp().Logger()
-				newLog = newLog.Output(zerolog.ConsoleWriter{
-					Out:        os.Stderr,
-					TimeFormat: "2006/01/02 15:04:05",
-				})
-
-				dm.SetLog(&newLog)
 				am.SetLogsEnabled(true)
 			case "box":
 				am.SetBoxesEnabled(true)
 			}
 		}
 	} else {
-		logFile, rErr := fs.Root.Create(filepath.Join(fs.DirAppPath(), "log.txt"))
+		logFile, rErr := fs.Root.Create(filepath.Join(fs.PathDirApp(), "log.txt"))
 		if rErr != nil {
 			am.Debug().Log().Error().Err(rErr).Msg("Failed to create log file")
 			os.Exit(1)
@@ -86,14 +81,17 @@ func main() {
 		zerolog.SetGlobalLevel(zerolog.Disabled)
 	}
 
+	if !result.Ok {
+		result.Err.LogErrStack(am.Debug().Log(), "main", "NewRoot", pd.FileManager)
+		os.Exit(1)
+	}
 	op := &guigui.RunOptions{
 		Title:         configs.AppTitle,
 		WindowMinSize: configs.AppWindowMinSize,
 	}
-	if rErr := guigui.Run(newRoot, op); rErr != nil {
-		err := am.Error()
-		if err != nil {
-			err.LogErrStack("main", "guigui.Run")
+	if err := guigui.Run(newRoot, op); err != nil {
+		if result := am.Error(); !result.Ok {
+			result.Err.LogErrStack(am.Debug().Log(), "main", "guigui.Run", pd.ErrorManager)
 		}
 		os.Exit(1)
 	}
