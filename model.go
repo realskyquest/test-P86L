@@ -33,6 +33,8 @@ type Model struct {
 	cache     CacheModel
 }
 
+// -- Getters for Model --
+
 func (m *Model) Mode() string {
 	if m.mode == "" {
 		return "home"
@@ -44,6 +46,8 @@ func (m *Model) Progress() string {
 	return m.progress
 }
 
+// -- Setters for Model --
+
 func (m *Model) SetMode(mode string) {
 	d := m.app.Debug()
 	d.Log().Info().Str("Page", mode).Msg("Sidebar")
@@ -53,6 +57,17 @@ func (m *Model) SetMode(mode string) {
 func (m *Model) SetProgress(progress string) {
 	m.progress = progress
 }
+
+func (m *Model) GameExecutablePath() string {
+	am := m.App()
+	data := m.Data()
+	if data.File().UsePreRelease {
+		return am.FileSystem().PathFilePrerelease()
+	}
+	return am.FileSystem().PathFileGame()
+}
+
+// -- Models --
 
 func (m *Model) App() *AppModel {
 	return &m.app
@@ -69,6 +84,8 @@ func (m *Model) Data() *DataModel {
 func (m *Model) Cache() *CacheModel {
 	return &m.cache
 }
+
+// -- RatelimitModel --
 
 type RatelimitModel struct {
 	progress bool

@@ -37,7 +37,7 @@ type DataModel struct {
 
 func NewData() file.Data {
 	return file.Data{
-		V:              0,
+		V:              0, // TODO: Set data version via env??
 		WindowX:        0,
 		WindowY:        0,
 		WindowWidth:    0,

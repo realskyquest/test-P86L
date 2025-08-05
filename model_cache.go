@@ -62,19 +62,19 @@ func (c *CacheModel) SetValid(value bool) {
 	c.valid = value
 }
 
-func (c *CacheModel) SetRepo(am *AppModel, repo *github.RepositoryRelease, locale string) pd.Result {
+func (c *CacheModel) SetRepos(am *AppModel, repo, preRepo *github.RepositoryRelease, locale string) pd.Result {
 	dm := am.Debug()
 
-	c.file.V = 0
 	c.file.Repo = repo
+	c.file.PreRepo = preRepo
 	c.file.Timestamp = time.Now()
 	c.file.ExpiresIn = time.Hour
-	if result := c.file.Validate(dm); !result.Ok {
+	if result := c.file.Validate(repo); !result.Ok {
 		c.valid = false
 	} else {
 		c.valid = true
 	}
-	dm.Log().Info().Str("CacheModel", "SetRepo").Msg(pd.FileManager)
+	dm.Log().Info().Str("CacheModel", "SetRepos").Msg(pd.FileManager)
 	return SaveCache(am, c.file)
 }
 

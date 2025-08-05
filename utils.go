@@ -22,13 +22,17 @@
 package p86l
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"p86l/configs"
 	pd "p86l/internal/debug"
 	"p86l/internal/file"
 	"runtime"
 	"strings"
+	"time"
 
+	"github.com/google/go-github/v71/github"
 	"github.com/hajimehoshi/guigui"
 	"github.com/hashicorp/go-version"
 	"github.com/pkg/browser"
@@ -84,7 +88,7 @@ func LoadB(am *AppModel, context *guigui.Context, model *Model, loadType string)
 		if !result.Ok {
 			return result
 		}
-		if result := c.Validate(dm); result.Ok {
+		if result := c.Validate(c.Repo); result.Ok {
 			model.cache.valid = true
 		}
 		model.cache.file = *c
@@ -137,6 +141,40 @@ func CheckNewerVersion(currentVersion, newVersion string) (pd.Result, bool) {
 	}
 
 	return pd.Ok(), newer.GreaterThan(current)
+}
+
+func GetPreRelease(am *AppModel) (pd.Result, *github.RepositoryRelease) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	opt := &github.ListOptions{
+		PerPage: 100,
+	}
+
+	maxPages := 5 // Limit to 500 releases (5 pages)
+	pageCount := 0
+
+	for {
+		rs, resp, err := am.GithubClient().Repositories.ListReleases(ctx, configs.RepoOwner, configs.RepoName, opt)
+		if err != nil {
+			return pd.NotOk(pd.New(fmt.Errorf("failed to get prerelease: %w", err), pd.NetworkError, pd.ErrNetworkPrereleaseRequest)), nil
+		}
+
+		for _, r := range rs {
+			if r.Prerelease != nil && *r.Prerelease {
+				return pd.Ok(), r
+			}
+		}
+
+		if resp.NextPage == 0 || pageCount >= maxPages {
+			break
+		}
+
+		opt.Page = resp.NextPage
+		pageCount++
+	}
+
+	return pd.NotOk(pd.New(fmt.Errorf("no pre-releases found"), pd.NetworkError, pd.ErrGitHubNoPreRelease)), nil
 }
 
 // -- Funcs for loading and saving --
@@ -192,6 +230,8 @@ func SaveData(am *AppModel, d file.Data) pd.Result {
 func SaveCache(am *AppModel, c file.Cache) pd.Result {
 	dm := am.Debug()
 	fs := am.FileSystem()
+	// TODO: Prehaps set file version via env?
+	c.V = 0
 
 	result, b := fs.EncodeCache(dm, c)
 	if !result.Ok {

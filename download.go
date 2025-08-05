@@ -23,47 +23,16 @@ package p86l
 
 import (
 	"archive/zip"
-	gctx "context"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
-	"p86l/configs"
 	pd "p86l/internal/debug"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/google/go-github/v71/github"
 )
-
-func GetPreRelease(am *AppModel) (*github.RepositoryRelease, error) {
-	ctx := gctx.Background()
-	opt := &github.ListOptions{
-		PerPage: 100,
-	}
-
-	for {
-		rs, resp, err := am.GithubClient().Repositories.ListReleases(ctx, configs.RepoOwner, configs.RepoName, opt)
-		if err != nil {
-			return nil, err
-		}
-
-		for _, r := range rs {
-			if r.Prerelease != nil && *r.Prerelease {
-				return r, nil
-			}
-		}
-
-		if resp.NextPage == 0 {
-			break
-		}
-		opt.Page = resp.NextPage
-	}
-
-	return nil, fmt.Errorf("no pre-releases found")
-}
 
 func DownloadGame(model *Model, filename, src string, preRelease bool) pd.Result {
 	am := model.App()
