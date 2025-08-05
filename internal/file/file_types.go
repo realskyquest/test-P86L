@@ -58,15 +58,14 @@ func (d *Data) Log(dm *pd.Debug) {
 }
 
 type Cache struct {
-	V            int                       `json:"v"`
-	Repo         *github.RepositoryRelease `json:"repo"`
-	Timestamp    time.Time                 `json:"time_stamp"`
-	ExpiresIn    time.Duration             `json:"expires_in"`
-	PreRepo      *github.RepositoryRelease `json:"pre_repo"`
-	PreTimestamp time.Time                 `json:"pre_time_stamp"`
-	PreExpiresIn time.Duration             `json:"pre_expires_in"`
+	V         int                       `json:"v"`
+	Repo      *github.RepositoryRelease `json:"repo"`
+	PreRepo   *github.RepositoryRelease `json:"prerelease_repo"`
+	Timestamp time.Time                 `json:"time_stamp"`
+	ExpiresIn time.Duration             `json:"expires_in"`
 }
 
+// TODO: Is this really needed?
 func (c *Cache) Log(dm *pd.Debug) {
 	log := dm.Log()
 
