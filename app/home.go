@@ -24,6 +24,7 @@ package app
 import (
 	"p86l"
 	"p86l/assets"
+	pd "p86l/internal/debug"
 
 	"github.com/dustin/go-humanize"
 	"github.com/hajimehoshi/guigui"
@@ -98,7 +99,7 @@ func (h *homeContent) Build(context *guigui.Context, appender *guigui.ChildWidge
 	img, err := assets.TheImageCache.Get("p86l")
 
 	if err != nil {
-		am.SetError(err)
+		am.SetError(pd.NotOk(err))
 		return err.Error()
 	}
 

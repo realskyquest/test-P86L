@@ -26,6 +26,7 @@ import (
 	"image"
 	"p86l"
 	"p86l/assets"
+	pd "p86l/internal/debug"
 	"strings"
 
 	"github.com/hajimehoshi/guigui"
@@ -90,7 +91,7 @@ func (a *aboutContent) Build(context *guigui.Context, appender *guigui.ChildWidg
 	img2, err2 := assets.TheImageCache.Get("dev")
 
 	if err := cmp.Or(err1, err2); err != nil {
-		am.SetError(err)
+		am.SetError(pd.NotOk(err))
 		return err.Error()
 	}
 

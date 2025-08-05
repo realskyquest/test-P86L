@@ -22,15 +22,11 @@
 package app
 
 import (
-	gctx "context"
 	"fmt"
 	"p86l"
 	"time"
 
 	"github.com/dustin/go-humanize"
-	"github.com/google/go-github/v71/github"
-	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/hajimehoshi/guigui"
 	"github.com/hajimehoshi/guigui/basicwidget"
 	"github.com/hajimehoshi/guigui/layout"
@@ -131,99 +127,24 @@ func (s *sidebarContent) Build(context *guigui.Context, appender *guigui.ChildWi
 	return nil
 }
 
-func (s *sidebarContent) HandleButtonInput(context *guigui.Context) guigui.HandleInputResult {
-	currentIndex := s.list.SelectedItemIndex()
-	itemsCount := s.list.ItemsCount()
-
-	if currentIndex >= 0 && currentIndex < itemsCount {
-		switch {
-		case inpututil.IsKeyJustPressed(ebiten.KeyArrowUp):
-			newIndex := currentIndex - 1
-			if newIndex >= 0 {
-				s.list.SelectItemByIndex(newIndex)
-				if item, ok := s.list.ItemByIndex(newIndex); ok && item.ID != s.model.Mode() {
-					s.model.SetMode(item.ID)
-				}
-				return guigui.HandleInputByWidget(s)
-			}
-		case inpututil.IsKeyJustPressed(ebiten.KeyArrowDown):
-			newIndex := currentIndex + 1
-			if newIndex < itemsCount {
-				s.list.SelectItemByIndex(newIndex)
-				if item, ok := s.list.ItemByIndex(newIndex); ok && item.ID != s.model.Mode() {
-					s.model.SetMode(item.ID)
-				}
-				return guigui.HandleInputByWidget(s)
-			}
-		}
-	}
-
-	return guigui.HandleInputResult{}
-}
-
-func (s *sidebarContent) Tick(context *guigui.Context) error {
-	if inpututil.IsKeyJustPressed(ebiten.KeyTab) {
-		context.SetFocused(s, true)
-		return nil
-	}
-	if context.IsWidgetHitAtCursor(&s.list) {
-		_, dy := ebiten.Wheel()
-
-		currentIndex := s.list.SelectedItemIndex()
-		itemsCount := s.list.ItemsCount()
-
-		newIndex := currentIndex - int(dy)
-
-		if newIndex < 0 {
-			newIndex = 0
-		} else if newIndex >= itemsCount {
-			newIndex = itemsCount - 1
-		}
-
-		if newIndex != currentIndex {
-			s.list.SelectItemByIndex(newIndex)
-			if item, ok := s.list.ItemByIndex(newIndex); ok && item.ID != s.model.Mode() {
-				s.model.SetMode(item.ID)
-			}
-			context.SetFocused(&s.list, true)
-		}
-	}
-
-	return nil
-}
-
 type sidebarStats struct {
 	guigui.DefaultWidget
 
-	progressTextInput basicwidget.TextInput
-	toastTextInput    basicwidget.TextInput
-	versionText       basicwidget.Text
-	ratelimitText     basicwidget.Text
-
-	ratelimitLeft int
-	ratelimitTime string
-	inProgress    bool
-	lastTick      int64
+	progressText   basicwidget.Text
+	toastTextInput basicwidget.TextInput
+	versionText    basicwidget.Text
+	ratelimitText  basicwidget.Text
 
 	model *p86l.Model
-}
-
-func githubRateLimit(am *p86l.AppModel, ctx gctx.Context) *github.RateLimits {
-	limits, _, err := am.GithubClient().RateLimit.Get(ctx)
-	if err != nil {
-		return nil
-	}
-	return limits
 }
 
 func (s *sidebarStats) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
 	am := s.model.App()
 	dm := am.Debug()
+	rlm := s.model.Ratelimit()
 
-	s.progressTextInput.SetValue(s.model.Progress())
-	s.progressTextInput.SetMultiline(true)
-	s.progressTextInput.SetAutoWrap(true)
-	s.progressTextInput.SetEditable(false)
+	s.progressText.SetValue(s.model.Progress())
+	s.progressText.SetAutoWrap(true)
 
 	if toast := dm.Toast(); toast != nil {
 		s.toastTextInput.SetValue(toast.String())
@@ -238,7 +159,13 @@ func (s *sidebarStats) Build(context *guigui.Context, appender *guigui.ChildWidg
 	s.versionText.SetHorizontalAlign(basicwidget.HorizontalAlignCenter)
 	s.versionText.SetVerticalAlign(basicwidget.VerticalAlignMiddle)
 
-	s.ratelimitText.SetValue(fmt.Sprintf("%d / 60 requests - %s", s.ratelimitLeft, s.ratelimitTime))
+	if limit := rlm.Limit(); limit == nil {
+		s.ratelimitText.SetValue("...")
+	} else {
+		rLeft := limit.Core.Remaining
+		rTime := humanize.RelTime(time.Now(), limit.Core.Reset.Time, "remaining", "ago")
+		s.ratelimitText.SetValue(fmt.Sprintf("%d / 60 requests - %s", rLeft, rTime))
+	}
 	s.ratelimitText.SetAutoWrap(true)
 	s.ratelimitText.SetHorizontalAlign(basicwidget.HorizontalAlignCenter)
 
@@ -258,35 +185,10 @@ func (s *sidebarStats) Build(context *guigui.Context, appender *guigui.ChildWidg
 		},
 		RowGap: u / 2,
 	}
-	appender.AppendChildWidgetWithBounds(&s.progressTextInput, gl.CellBounds(1, 0))
+	appender.AppendChildWidgetWithBounds(&s.progressText, gl.CellBounds(1, 0))
 	appender.AppendChildWidgetWithBounds(&s.toastTextInput, gl.CellBounds(1, 1))
 	appender.AppendChildWidgetWithBounds(&s.versionText, gl.CellBounds(1, 2))
 	appender.AppendChildWidgetWithBounds(&s.ratelimitText, gl.CellBounds(1, 3))
-
-	return nil
-}
-
-func (s *sidebarStats) Tick(context *guigui.Context) error {
-	if ebiten.Tick()-s.lastTick >= int64(ebiten.TPS()*2) && !s.inProgress {
-		s.lastTick = ebiten.Tick()
-		s.inProgress = true
-
-		go func() {
-			ctx, cancel := gctx.WithTimeout(gctx.Background(), time.Second*5)
-			limits := githubRateLimit(s.model.App(), ctx)
-			defer cancel()
-
-			if limits != nil {
-				s.ratelimitLeft = limits.Core.Remaining
-				s.ratelimitTime = humanize.RelTime(time.Now(), limits.Core.Reset.Time, "remaining", "ago")
-			} else {
-				s.ratelimitLeft = -1
-				s.ratelimitTime = ""
-			}
-
-			s.inProgress = false
-		}()
-	}
 
 	return nil
 }

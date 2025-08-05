@@ -23,12 +23,10 @@ package app
 
 import (
 	"cmp"
-	gctx "context"
 	"image"
 	"p86l"
 	"p86l/assets"
 	p86lLocale "p86l/assets/locale"
-	"p86l/configs"
 	pd "p86l/internal/debug"
 	"runtime"
 	"slices"
@@ -43,26 +41,6 @@ import (
 	"github.com/hajimehoshi/guigui/layout"
 	i18n "github.com/nicksnyder/go-i18n/v2/i18n"
 )
-
-type breakWidget struct {
-	column int // Width
-	row    int // Height
-}
-
-func (b *breakWidget) Get() (column, row int) {
-	return b.column, b.row
-}
-
-// Width, Height
-func (b *breakWidget) Set(column, row int) {
-	b.column = column
-	b.row = row
-}
-
-func breakSize(context *guigui.Context, size int) bool {
-	scaledWidth := int(float64(context.AppSize().X) / context.AppScale())
-	return scaledWidth > size
-}
 
 type Root struct {
 	guigui.DefaultWidget
@@ -85,42 +63,48 @@ type Root struct {
 	locales           []language.Tag
 	faceSourceEntries []basicwidget.FaceSourceEntry
 
-	sync sync.Once
-	err  *pd.Error
+	rlResult chan ratelimitResult
+	ghResult chan githubResult
+
+	sync   sync.Once
+	result pd.Result
 }
 
-func NewRoot(version string) (*Root, *pd.Error) {
+func NewRoot(version string) (pd.Result, *Root) {
 	r := &Root{}
 	am := r.model.App()
 
 	am.SetPlainVersion(version)
-	err := am.SetFileSystem()
-	if err != nil {
-		return nil, err
+	result := am.SetFileSystem()
+	if !result.Ok {
+		return result, nil
 	}
 
-	return r, nil
+	return pd.Ok(), r
 }
 
 func (r *Root) Model() *p86l.Model {
 	return &r.model
 }
 
-func (r *Root) runApp() *pd.Error {
+func (r *Root) runApp() pd.Result {
 	am := r.model.App()
+
+	r.rlResult = make(chan ratelimitResult, 1)
+	r.ghResult = make(chan githubResult, 1)
 
 	iconImages, err1 := assets.GetIconImages()
 	bundle, err2 := p86lLocale.GetLocales(language.English)
 
 	if err := cmp.Or(err1, err2); err != nil {
-		return err
+		return pd.NotOk(err)
 	}
 
 	ebiten.SetWindowIcon(iconImages)
 	am.SetI18nBundle(bundle)
 	am.SetI18nLocalizer(i18n.NewLocalizer(bundle, "en"))
 
-	return nil
+	return pd.Ok()
 }
 
 func (r *Root) updateFontFaceSources(context *guigui.Context) {
@@ -142,19 +126,19 @@ func (r *Root) Build(context *guigui.Context, appender *guigui.ChildWidgetAppend
 		var gpuInfo ebiten.DebugInfo
 		ebiten.ReadDebugInfo(&gpuInfo)
 
-		err1 := r.runApp()
-		err2 := p86l.LoadB(am, context, &r.model, "data")
-		err3 := p86l.LoadB(am, context, &r.model, "cache")
+		result1 := r.runApp()
+		result2 := p86l.LoadB(am, context, &r.model, "data")
+		result3 := p86l.LoadB(am, context, &r.model, "cache")
 
-		if err := cmp.Or(err1, err2, err3); err != nil {
-			r.err = err
+		if result := cmp.Or(result1, result2, result3); !result.Ok {
+			r.result = result
 			return
 		}
 
 		if launcherVersion := am.PlainVersion(); launcherVersion != "dev" {
-			err4 := am.SetVersion(launcherVersion)
-			if err4 != nil {
-				err4.LogWarn("Root.sync", "Build")
+			result4 := am.SetVersion(launcherVersion)
+			if !result4.Ok {
+				result4.Err.LogWarn(log, "Root.sync", "Build", pd.FileManager)
 			}
 		}
 
@@ -175,17 +159,19 @@ func (r *Root) Build(context *guigui.Context, appender *guigui.ChildWidgetAppend
 		if data.File().WindowMaximize {
 			ebiten.MaximizeWindow()
 		}
+
+		r.result = pd.Ok()
 	})
 
-	if r.err != nil {
-		am.SetError(r.err)
-		return r.err.Error()
+	if !r.result.Ok {
+		am.SetError(r.result)
+		return r.result.Err.Error()
 	}
 	r.updateFontFaceSources(context)
 
 	if ebiten.IsWindowBeingClosed() {
 		log.Info().Msg("P86L Closing")
-		r.err = data.Save(am)
+		r.result = data.Save(am)
 	}
 
 	r.popupContent.model = &r.model
@@ -228,7 +214,7 @@ func (r *Root) Build(context *guigui.Context, appender *guigui.ChildWidgetAppend
 	// -- popup --
 
 	r.popup.SetOnClosed(func(reason basicwidget.PopupClosedReason) {
-		dm.SetPopup(nil)
+		dm.SetPopup(nil, pd.UnknownManager)
 		r.popupDebounce = false
 	})
 	if dm.Popup() != nil && !r.popupDebounce {
@@ -262,6 +248,7 @@ func (r *Root) Tick(context *guigui.Context) error {
 	am := r.model.App()
 	dm := am.Debug()
 	log := dm.Log()
+	rlm := r.model.Ratelimit()
 	data := r.model.Data()
 	cache := r.model.Cache()
 
@@ -274,146 +261,43 @@ func (r *Root) Tick(context *guigui.Context) error {
 	}
 	data.File().WindowMaximize = maximized
 
-	if ebiten.Tick()-r.lastTick >= int64(ebiten.TPS()*5) && !cache.Progress() {
-		r.lastTick = ebiten.Tick()
-		cache.SetProgress(true)
+	for range 2 {
+		select {
+		case rlResult := <-r.rlResult:
+			rlm.SetProgress(false)
+			if !rlResult.result.Ok {
+				dm.SetToast(rlResult.result.Err, pd.NetworkManager)
+				rlm.SetLimit(nil)
+			} else {
+				rlm.SetLimit(rlResult.limit)
+			}
+		case ghResult := <-r.ghResult:
+			cache.SetProgress(false)
+			if !ghResult.result.Ok {
+				dm.SetToast(ghResult.result.Err, pd.NetworkManager)
+			} else {
+				cache.SetRepos(am, ghResult.release, ghResult.prerelease, data.File().Locale)
+			}
+		default:
 
-		if !cache.IsValid() || time.Now().After(cache.File().Timestamp.Add(cache.File().ExpiresIn)) {
-			log.Info().Str("Cache", "cache is invalid").Str("Root", "Tick").Msg(pd.NetworkManager)
-			go func() {
-				ctx := gctx.Background()
-				release, _, rErr := am.GithubClient().Repositories.GetLatestRelease(ctx, configs.RepoOwner, configs.RepoName)
-				if rErr != nil {
-					log.Error().Any("Game release", rErr).Msg(pd.NetworkManager)
-					cache.SetProgress(false)
-					return
-				}
-				err := cache.SetRepo(am, release, r.model.Data().File().Locale)
-				if err != nil {
-					dm.SetToast(err)
-				}
-				cache.SetProgress(false)
-			}()
 		}
 	}
 
-	return nil
-}
+	currentTick := ebiten.Tick()
+	if currentTick-r.lastTick >= int64(ebiten.TPS()*5) {
+		r.lastTick = currentTick
 
-type rootBackground struct {
-	guigui.DefaultWidget
-
-	bgImage    basicwidget.Image
-	background basicwidget.Background
-
-	model    *p86l.Model
-	sidebar  *Sidebar
-	bgBounds image.Rectangle
-
-	err *pd.Error
-}
-
-func (r *rootBackground) SetSidebar(sidebar *Sidebar) {
-	r.sidebar = sidebar
-}
-
-func (r *rootBackground) SetBgBounds(bounds image.Rectangle) {
-	r.bgBounds = bounds
-}
-
-func (r *rootBackground) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
-	// TODO: Fix background image not covering the whole window sometimes.
-	am := r.model.App()
-
-	img, err := assets.TheImageCache.Get("banner")
-	r.err = err
-
-	if r.err != nil {
-		am.SetError(r.err)
-		return r.err.Error()
-	}
-
-	r.bgImage.SetImage(img)
-	context.SetOpacity(&r.background, 0.9)
-
-	imgWidth := img.Bounds().Dx()
-	imgHeight := img.Bounds().Dy()
-	aspectRatio := float64(imgHeight) / float64(imgWidth)
-
-	windowSize := context.ActualSize(r)
-	availableWidth := windowSize.X
-
-	newHeight := int(float64(availableWidth) * aspectRatio)
-
-	if newHeight < windowSize.Y {
-		newHeight = windowSize.Y
-		availableWidth = int(float64(newHeight) / aspectRatio)
-	}
-
-	context.SetSize(&r.bgImage, image.Pt(availableWidth+2, newHeight+2), r)
-
-	yOffset := 0
-	if newHeight > windowSize.Y {
-		yOffset = -(newHeight - windowSize.Y) / 2
-	}
-
-	imgPosition := image.Pt(00, yOffset)
-	appender.AppendChildWidgetWithPosition(&r.bgImage, imgPosition)
-
-	if r.model.Mode() != "home" {
-		appender.AppendChildWidgetWithBounds(&r.background, r.bgBounds)
-	}
-
-	return nil
-}
-
-type rootPopupContent struct {
-	guigui.DefaultWidget
-
-	popup *basicwidget.Popup
-
-	titleText   basicwidget.Text
-	closeButton basicwidget.Button
-
-	model *p86l.Model
-}
-
-func (r *rootPopupContent) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
-	dm := r.model.App().Debug()
-	u := basicwidget.UnitSize(context)
-
-	r.titleText.SetValue(dm.Popup().String())
-	r.titleText.SetAutoWrap(true)
-	r.titleText.SetBold(true)
-	r.titleText.SetSelectable(true)
-
-	r.closeButton.SetText("Close")
-	r.closeButton.SetOnUp(func() {
-		r.popup.Close()
-	})
-
-	gl := layout.GridLayout{
-		Bounds: context.Bounds(r).Inset(u / 2),
-		Heights: []layout.Size{
-			layout.FlexibleSize(1),
-			layout.LazySize(func(row int) layout.Size {
-				if row != 1 {
-					return layout.FixedSize(0)
-				}
-				return layout.FixedSize(r.closeButton.DefaultSize(context).Y)
-			}),
-		},
-	}
-	appender.AppendChildWidgetWithBounds(&r.titleText, gl.CellBounds(0, 0))
-	{
-		gl := layout.GridLayout{
-			Bounds: gl.CellBounds(0, 1),
-			Widths: []layout.Size{
-				layout.FlexibleSize(1),
-				layout.FixedSize(r.closeButton.DefaultSize(context).X),
-			},
+		if cache.IsValid() && ((!rlm.Progress() && rlm.Limit() == nil) || (rlm.Limit() != nil && time.Now().After(rlm.Limit().Core.Reset.Time))) {
+			rlm.SetProgress(true)
+			log.Info().Str("Ratelimit", "ratelimit refresh triggered").Msg(pd.NetworkManager)
+			go r.fetchRatelimit()
 		}
-		appender.AppendChildWidgetWithBounds(&r.closeButton, gl.CellBounds(1, 0))
+
+		if !cache.Progress() && !cache.IsValid() || time.Now().After(cache.File().Timestamp.Add(cache.File().ExpiresIn)) {
+			cache.SetProgress(true)
+			log.Info().Str("Cache", "cache refresh triggered").Msg(pd.NetworkManager)
+			go r.fetchLatestCache()
+		}
 	}
 
 	return nil

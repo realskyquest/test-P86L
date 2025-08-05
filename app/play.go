@@ -22,100 +22,46 @@
 package app
 
 import (
-	"cmp"
-	gctx "context"
-	"fmt"
-	"os/exec"
+	"image"
 	"p86l"
 	"p86l/assets"
 	"p86l/configs"
 	pd "p86l/internal/debug"
-	"path/filepath"
 	"sync"
 
-	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/guigui"
 	"github.com/hajimehoshi/guigui/basicwidget"
 	"github.com/hajimehoshi/guigui/layout"
-	"github.com/rs/zerolog/log"
 )
 
 type Play struct {
 	guigui.DefaultWidget
 
+	panel   basicwidget.Panel
 	content playContent
-	links   playLinks
-
-	formPre          basicwidget.Form
-	preReleaseText   basicwidget.Text
-	preReleaseToggle basicwidget.Toggle
 
 	model *p86l.Model
-
-	err *pd.Error
 }
 
 func (p *Play) SetModel(model *p86l.Model) {
 	p.model = model
+	p.content.model = model
 }
 
 func (p *Play) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
-	am := p.model.App()
-	dm := am.Debug()
-	data := p.model.Data()
+	bounds := context.Bounds(p)
+	contentHeight := p.content.Height()
 
-	if p.err != nil {
-		am.SetError(p.err)
-		return p.err.Error()
-	}
-
-	p.content.model = p.model
-	p.links.model = p.model
-
-	p.preReleaseText.SetValue(am.T("settings.prerelease"))
-	p.preReleaseToggle.SetOnValueChanged(func(value bool) {
-		if value {
-			data.SetUsePreRelease(dm, true)
-		} else {
-			data.SetUsePreRelease(dm, false)
-		}
-		p.err = data.Save(am)
-	})
-	if data.File().UsePreRelease {
-		p.preReleaseToggle.SetValue(true)
+	var contentSize image.Point
+	if bounds.Dy() > contentHeight {
+		contentSize = image.Pt(bounds.Dx(), bounds.Dy())
 	} else {
-		p.preReleaseToggle.SetValue(false)
+		contentSize = image.Pt(bounds.Dx(), contentHeight)
 	}
-	p.formPre.SetItems([]basicwidget.FormItem{
-		{
-			PrimaryWidget:   &p.preReleaseText,
-			SecondaryWidget: &p.preReleaseToggle,
-		},
-	})
+	context.SetSize(&p.content, contentSize, p)
+	p.panel.SetContent(&p.content)
 
-	u := basicwidget.UnitSize(context)
-
-	var linksSize int
-	if breakSize(context, 1024) {
-		linksSize = u * 2
-	} else if breakSize(context, 640) {
-		linksSize = u*5 - (u / 2)
-	} else {
-		linksSize = u * 6
-	}
-
-	gl := layout.GridLayout{
-		Bounds: context.Bounds(p).Inset(u / 2),
-		Heights: []layout.Size{
-			layout.FlexibleSize(1),
-			layout.FixedSize(linksSize),
-			layout.FixedSize(u * 2),
-		},
-		RowGap: u / 2,
-	}
-	appender.AppendChildWidgetWithBounds(&p.content, gl.CellBounds(0, 0))
-	appender.AppendChildWidgetWithBounds(&p.links, gl.CellBounds(0, 1))
-	appender.AppendChildWidgetWithBounds(&p.formPre, gl.CellBounds(0, 2))
+	appender.AppendChildWidgetWithBounds(&p.panel, context.Bounds(p))
 
 	return nil
 }
@@ -123,442 +69,456 @@ func (p *Play) Build(context *guigui.Context, appender *guigui.ChildWidgetAppend
 type playContent struct {
 	guigui.DefaultWidget
 
-	installButton  basicwidget.Button
-	playButton     basicwidget.Button
-	updateButton   basicwidget.Button
-	launcherButton basicwidget.Button
+	buttons          playButtons
+	links            playLinks
+	form             basicwidget.Form
+	prereleaseText   basicwidget.Text
+	prereleaseToggle basicwidget.Toggle
 
-	state      int
-	inProgress bool
+	box1   basicwidget.Background
+	box2   basicwidget.Background
+	box3   basicwidget.Background
+	height int
+	model  *p86l.Model
 
-	gameRunning bool
-	gameMutex   sync.Mutex
+	prProgress bool
+	prResult   chan prereleaseResult
 
-	model *p86l.Model
-
-	sync sync.Once
-}
-
-func (p *playContent) handleDownload(context *guigui.Context) {
-	am := p.model.App()
-	dm := am.Debug()
-
-	p.inProgress = true
-
-	context.SetEnabled(&p.installButton, false)
-	context.SetEnabled(&p.playButton, false)
-	context.SetEnabled(&p.updateButton, false)
-
-	cache := p.model.Cache()
-	if p.model.Data().File().UsePreRelease {
-		pr, rErr := p86l.GetPreRelease(am)
-		if rErr != nil {
-			dm.SetPopup(pd.New(rErr, pd.NetworkError, pd.ErrNetworkDownloadRequest))
-		}
-		assets := pr.Assets
-
-		for _, asset := range assets {
-			if name := asset.GetName(); p86l.IsValidPreGameFile(name) {
-				downloadUrl := asset.GetBrowserDownloadURL()
-				log.Info().Any("Asset", []string{name, downloadUrl}).Str("Play", "playContent").Msg(pd.NetworkManager)
-				err := p86l.DownloadGame(p.model, name, downloadUrl, true)
-				if err != nil {
-					dm.SetPopup(err)
-					break
-				}
-
-				break
-			}
-		}
-	} else {
-		assets := cache.File().Repo.Assets
-
-		for _, asset := range assets {
-			if name := asset.GetName(); p86l.IsValidGameFile(name) {
-				downloadUrl := asset.GetBrowserDownloadURL()
-				log.Info().Any("Asset", []string{name, downloadUrl}).Str("Play", "playContent").Msg(pd.NetworkManager)
-				err := p86l.DownloadGame(p.model, name, downloadUrl, false)
-				if err != nil {
-					dm.SetPopup(err)
-					break
-				}
-
-				if err = p.model.Data().SetGameVersion(dm, cache.File().Repo.GetTagName()); err != nil {
-					dm.SetToast(err)
-					break
-				}
-				if err = p.model.Data().Save(am); err != nil {
-					dm.SetToast(err)
-				}
-				break
-			}
-		}
-	}
-
-	context.SetEnabled(&p.installButton, true)
-	context.SetEnabled(&p.playButton, true)
-	context.SetEnabled(&p.updateButton, true)
-
-	p.inProgress = false
-}
-
-func (p *playContent) handlePlay() {
-	am := p.model.App()
-	dm := am.Debug()
-	fs := am.FileSystem()
-	data := p.model.Data()
-
-	if p.state != 1 {
-		return
-	}
-
-	if err := fs.IsDirR(fs.DirGamePath()); err != nil {
-		dm.SetPopup(pd.New(fmt.Errorf("game not found"), pd.AppError, pd.ErrGameNotExist))
-		return
-	}
-
-	p.gameMutex.Lock()
-	if p.gameRunning {
-		p.gameMutex.Unlock()
-		dm.SetPopup(pd.New(fmt.Errorf("game is already running."), pd.AppError, pd.ErrGameRunning))
-		return
-	}
-	p.gameRunning = true
-	p.gameMutex.Unlock()
-
-	go func() {
-		defer func() {
-			p.gameMutex.Lock()
-			p.gameRunning = false
-			p.gameMutex.Unlock()
-			log.Info().Str("Game", "game has closed").Str("Play", "playContent").Msg(pd.FileManager)
-		}()
-
-		var game string
-		if data.File().UsePreRelease {
-			game = "pregame"
-		} else {
-			game = "game"
-		}
-
-		cmd := exec.Command(filepath.Join(fs.CompanyDirPath, "build", game, "Project-86.exe"))
-		if err := cmd.Start(); err != nil {
-			dm.SetPopup(pd.New(err, pd.AppError, pd.ErrGameNotExist))
-			return
-		}
-
-		log.Info().Str("Game", "starting game").Str("Play", "playContent").Msg(pd.FileManager)
-		ebiten.MinimizeWindow()
-
-		if err := cmd.Wait(); err != nil {
-			if _, ok := err.(*exec.ExitError); !ok {
-				dm.SetPopup(pd.New(err, pd.AppError, pd.ErrGameNotExist))
-			}
-		}
-	}()
-}
-
-func (p *playContent) handleUpdate(context *guigui.Context) {
-	am := p.model.App()
-	dm := am.Debug()
-	data := p.model.Data()
-	cache := p.model.Cache()
-
-	if p.state != 1 && !cache.IsValid() {
-		return
-	}
-
-	value, err := p86l.CheckNewerVersion(data.File().GameVersion, cache.File().Repo.GetTagName())
-	if err != nil {
-		dm.SetPopup(err)
-		return
-	}
-	if value {
-		log.Info().Str("Game", "New version found").Str("Play", "playContent").Msg(pd.NetworkManager)
-		go p.handleDownload(context)
-	} else {
-		dm.SetPopup(pd.New(fmt.Errorf("newer version not found"), pd.AppError, pd.ErrGameVersionInvalid))
-	}
+	sync   sync.Once
+	result pd.Result
 }
 
 func (p *playContent) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
 	am := p.model.App()
 	dm := am.Debug()
-	fs := am.FileSystem()
 	data := p.model.Data()
-	cache := p.model.Cache()
+	p.buttons.model = p.model
+	p.links.model = p.model
 
 	p.sync.Do(func() {
-		context.SetEnabled(&p.launcherButton, false)
-		go func() {
-			ctx := gctx.Background()
-			release, _, rErr := am.GithubClient().Repositories.GetLatestRelease(ctx, configs.CompanyName, configs.AppName)
-			if rErr != nil {
-				log.Error().Any("Launcher release", rErr).Msg(pd.NetworkManager)
-				return
-			}
-			if am.Version() != nil {
-				value, err := p86l.CheckNewerVersion(am.PlainVersion(), release.GetTagName())
-				if err != nil {
-					dm.SetToast(err)
-					return
-				}
-				log.Info().Str("playContent", "Build").Msg("Launcher Updater")
-				if value {
-					context.SetEnabled(&p.launcherButton, true)
-				}
-			}
-		}()
+		p.result = pd.Ok()
+		p.prResult = make(chan prereleaseResult, 1)
 	})
 
-	p.installButton.SetOnDown(func() {
-		if p.state != 0 && !cache.IsValid() {
+	if !p.result.Ok {
+		am.SetError(p.result)
+		return p.result.Err.Error()
+	}
+
+	// TODO: Move this to Root
+	select {
+	case prResult := <-p.prResult:
+		p.prProgress = false
+		if !prResult.result.Ok {
+			dm.SetToast(prResult.result.Err, pd.FileManager)
+		}
+	default:
+
+	}
+
+	p.prereleaseText.SetValue(am.T("settings.prerelease"))
+	p.prereleaseToggle.SetOnValueChanged(func(value bool) {
+		if value == data.File().UsePreRelease {
 			return
 		}
-		go p.handleDownload(context)
+		if !p.prProgress {
+			p.prProgress = true
+			go p.handlePrerelease(value)
+		}
 	})
-	p.playButton.SetOnDown(p.handlePlay)
-	p.updateButton.SetOnDown(func() {
-		p.handleUpdate(context)
-	})
-	p.launcherButton.SetOnDown(func() {
-
-	})
-
 	if data.File().UsePreRelease {
-		p.installButton.SetText(am.T("play.prerelease"))
+		p.prereleaseToggle.SetValue(true)
 	} else {
-		p.installButton.SetText(am.T("play.install"))
+		p.prereleaseToggle.SetValue(false)
 	}
-	p.playButton.SetText(am.T("play.play"))
-	p.updateButton.SetText(am.T("play.update"))
-	p.launcherButton.SetText(am.T("play.launcher"))
-
-	if data.File().UsePreRelease {
-		if err := fs.IsDirR(filepath.Join(fs.DirBuildPath(), "pregame", "Project-86.exe")); err == nil {
-			// play.
-			p.state = 1
-		} else {
-			// install.
-			p.state = 0
-		}
-	} else {
-		if err := fs.IsDirR(filepath.Join(fs.DirGamePath(), "Project-86.exe")); err == nil {
-			// play.
-			p.state = 1
-		} else {
-			// install.
-			p.state = 0
-		}
-	}
-
-	// if downloading not in progress
-	if !p.inProgress {
-		// cache not valid.
-		if cache.IsValid() {
-			context.SetEnabled(&p.installButton, true)
-			context.SetEnabled(&p.updateButton, true)
-		} else {
-			context.SetEnabled(&p.installButton, false)
-			context.SetEnabled(&p.updateButton, false)
-		}
-
-		// enable update.
-		if cache.IsValid() {
-			value, err := p86l.CheckNewerVersion(data.File().GameVersion, cache.File().Repo.GetTagName())
-			if err != nil {
-				dm.SetToast(err)
-			}
-			if value {
-				context.SetEnabled(&p.updateButton, true)
-			} else {
-				context.SetEnabled(&p.updateButton, false)
-			}
-		}
-	}
+	p.form.SetItems([]basicwidget.FormItem{
+		{
+			PrimaryWidget:   &p.prereleaseText,
+			SecondaryWidget: &p.prereleaseToggle,
+		},
+	})
 
 	u := basicwidget.UnitSize(context)
 	gl := layout.GridLayout{
-		Bounds: context.Bounds(p),
+		Bounds: context.Bounds(p).Inset(u / 2),
 		Widths: []layout.Size{
-			layout.FlexibleSize(1),
-			layout.FlexibleSize(2),
 			layout.FlexibleSize(1),
 		},
 		Heights: []layout.Size{
 			layout.FlexibleSize(1),
-			layout.LazySize(func(rowOrColumn int) layout.Size {
-				if breakSize(context, 620) {
-					return layout.FixedSize(u * 2)
-				}
-				return layout.FixedSize(u * 4)
-			}),
+			layout.FixedSize(p.buttons.Height()),
 			layout.FlexibleSize(1),
+			layout.FixedSize(p.links.Height()),
+			layout.FixedSize(p.form.DefaultSizeInContainer(context, context.Bounds(p).Dx()-u).Y),
 		},
+		RowGap: u / 2,
 	}
-	var glI layout.GridLayout
-	var bPlayButton breakWidget
-	var bUpdateButton breakWidget
-	var bLauncherButton breakWidget
-	if breakSize(context, 620) {
-		glI = layout.GridLayout{
-			Bounds: gl.CellBounds(1, 1),
-			Widths: []layout.Size{
-				layout.FlexibleSize(1),
-				layout.FlexibleSize(1),
-				layout.FlexibleSize(1),
-			},
-			ColumnGap: u / 2,
-		}
-		bPlayButton.Set(0, 0)
-		bUpdateButton.Set(1, 0)
-		bLauncherButton.Set(2, 0)
-	} else {
-		glI = layout.GridLayout{
-			Bounds: gl.CellBounds(1, 1),
-			Widths: []layout.Size{
-				layout.FlexibleSize(1),
-			},
-			Heights: []layout.Size{
-				layout.FixedSize(u),
-				layout.FixedSize(u),
-				layout.FixedSize(u),
-			},
-			RowGap: u / 2,
-		}
-		bPlayButton.Set(0, 0)
-		bUpdateButton.Set(0, 1)
-		bLauncherButton.Set(0, 2)
+	p.height = (gl.CellBounds(0, 1).Dy() + gl.CellBounds(0, 3).Dy() + gl.CellBounds(0, 4).Dy()) + u*3
+	am.RenderBox(appender, &p.box1, gl.CellBounds(0, 1))
+	am.RenderBox(appender, &p.box2, gl.CellBounds(0, 3))
+	am.RenderBox(appender, &p.box3, gl.CellBounds(0, 4))
+	appender.AppendChildWidgetWithBounds(&p.buttons, gl.CellBounds(0, 1))
+	appender.AppendChildWidgetWithBounds(&p.links, gl.CellBounds(0, 3))
+	appender.AppendChildWidgetWithBounds(&p.form, gl.CellBounds(0, 4))
+
+	return nil
+}
+
+func (a *playContent) Height() int {
+	return a.height
+}
+
+type playButtons struct {
+	guigui.DefaultWidget
+
+	buttons [4]basicwidget.Button
+
+	progress      bool
+	progressMutex sync.Mutex
+
+	height int
+	model  *p86l.Model
+
+	gFResult   chan gameFileResult
+	lRResult   chan launcherReleaseResult
+	gFProgress bool
+
+	sync sync.Once
+}
+
+func (p *playButtons) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
+	am := p.model.App()
+	dm := am.Debug()
+	data := p.model.Data()
+	cache := p.model.Cache()
+
+	p.sync.Do(func() {
+		p.gFResult = make(chan gameFileResult, 1)
+		p.lRResult = make(chan launcherReleaseResult, 1)
+
+		go p.fetchLauncherRelease()
+	})
+
+	buttonTexts := []string{"play.install", "play.update", "play.play", "play.launcher"}
+	buttonActions := []func(){
+		func() { go p.handleGameDownload("handleInstall") },
+		func() { go p.handleGameDownload("handleUpdate") },
+		func() { go p.handlePlay() },
+		func() { go p.handleLauncher() },
 	}
-	switch p.state {
-	case 0:
-		appender.AppendChildWidgetWithBounds(&p.installButton, gl.CellBounds(1, 1))
-	case 1:
-		appender.AppendChildWidgetWithBounds(&p.playButton, glI.CellBounds(bPlayButton.Get()))
-		appender.AppendChildWidgetWithBounds(&p.updateButton, glI.CellBounds(bUpdateButton.Get()))
-		appender.AppendChildWidgetWithBounds(&p.launcherButton, glI.CellBounds(bLauncherButton.Get()))
+
+	for i := range p.buttons {
+		if t := buttonTexts[i]; t == "play.install" {
+			if data.File().UsePreRelease {
+				p.buttons[i].SetText(am.T("play.prerelease"))
+			} else {
+				p.buttons[i].SetText(am.T(t))
+			}
+		} else {
+			p.buttons[i].SetText(am.T(t))
+		}
+		p.buttons[i].SetOnDown(buttonActions[i])
+	}
+
+	for range 2 {
+		select {
+		case gFResult := <-p.gFResult: // Handle game files.
+			p.gFProgress = false
+
+			for i := range p.buttons {
+				switch i {
+				case 0: // Install
+					if gFResult.gameFile {
+						context.SetEnabled(&p.buttons[i], false)
+					} else {
+						context.SetEnabled(&p.buttons[i], true)
+					}
+				case 1: // Update
+					if !gFResult.gameFile {
+						context.SetEnabled(&p.buttons[i], false)
+					} else {
+						if !cache.IsValid() {
+							context.SetEnabled(&p.buttons[i], false)
+						} else {
+							if data.File().GameVersion == "" && !cache.IsValid() {
+								context.SetEnabled(&p.buttons[i], false)
+							} else {
+								if result, uValue := p86l.CheckNewerVersion(data.File().GameVersion, cache.File().Repo.GetTagName()); !result.Ok {
+									context.SetEnabled(&p.buttons[i], false)
+									dm.SetToast(result.Err, pd.FileManager)
+								} else {
+									if uValue {
+										context.SetEnabled(&p.buttons[i], true)
+									} else {
+										context.SetEnabled(&p.buttons[i], false)
+									}
+								}
+							}
+						}
+					}
+				case 2: // Play
+					if gFResult.gameFile {
+						context.SetEnabled(&p.buttons[i], true)
+					} else {
+						context.SetEnabled(&p.buttons[i], false)
+					}
+				}
+			}
+		case lRResult := <-p.lRResult: // Handle launcher update.
+			// TODO: Move to once?
+			// Since we gonna check for updates once, when the app/play page is opened only.
+			if !lRResult.result.Ok {
+				context.SetEnabled(&p.buttons[3], false)
+				dm.SetToast(lRResult.result.Err, pd.NetworkManager)
+			} else {
+				if launcherVersion := am.PlainVersion(); launcherVersion == "dev" {
+					context.SetEnabled(&p.buttons[3], false)
+				} else {
+					if result, lValue := p86l.CheckNewerVersion(launcherVersion, lRResult.release.GetTagName()); !result.Ok {
+						context.SetEnabled(&p.buttons[3], false)
+						dm.SetToast(result.Err, pd.FileManager)
+					} else {
+						if lValue {
+							context.SetEnabled(&p.buttons[3], true)
+						} else {
+							context.SetEnabled(&p.buttons[3], false)
+						}
+					}
+				}
+			}
+		default:
+
+		}
+	}
+
+	for i := range p.buttons {
+		if p.progress {
+			context.SetEnabled(&p.buttons[i], false)
+		}
+	}
+
+	if !p.gFProgress {
+		p.gFProgress = true
+		go p.handleGameFile()
+	}
+
+	var (
+		u         = basicwidget.UnitSize(context)
+		widths    []layout.Size
+		heights   []layout.Size
+		positions [4]breakWidget
+	)
+
+	switch {
+	case breakSize(context, 900):
+		widths = []layout.Size{
+			layout.FlexibleSize(1),
+			layout.FlexibleSize(1),
+			layout.FixedSize(u / 2),
+			layout.FlexibleSize(1),
+			layout.FixedSize(u / 2),
+			layout.FlexibleSize(1),
+			layout.FixedSize(u / 2),
+			layout.FlexibleSize(1),
+			layout.FlexibleSize(1),
+		}
+		heights = []layout.Size{
+			layout.FixedSize(u * 2),
+		}
+		positions = [4]breakWidget{
+			{1, 0},
+			{3, 0},
+			{5, 0},
+			{7, 0},
+		}
+	case breakSize(context, 700):
+		widths = []layout.Size{
+			layout.FlexibleSize(1),
+			layout.FlexibleSize(1),
+			layout.FixedSize(u / 2),
+			layout.FlexibleSize(1),
+			layout.FlexibleSize(1),
+		}
+		heights = []layout.Size{
+			layout.FixedSize(int(float64(u) * 1.5)),
+			layout.FixedSize(int(float64(u) * 1.5)),
+		}
+		positions = [4]breakWidget{
+			{1, 0},
+			{1, 1},
+			{3, 0},
+			{3, 1},
+		}
+	default:
+		widths = []layout.Size{
+			layout.FlexibleSize(1),
+		}
+		heights = []layout.Size{
+			layout.FixedSize(u),
+			layout.FixedSize(u),
+			layout.FixedSize(u),
+			layout.FixedSize(u),
+		}
+		positions = [4]breakWidget{
+			{0, 0},
+			{0, 1},
+			{0, 2},
+			{0, 3},
+		}
+	}
+
+	gl := layout.GridLayout{
+		Bounds:  context.Bounds(p),
+		Widths:  widths,
+		Heights: heights,
+		RowGap:  u / 2,
+	}
+
+	switch {
+	case breakSize(context, 900):
+		p.height = gl.CellBounds(positions[0].Get()).Dy()
+	case breakSize(context, 700):
+		p.height = gl.CellBounds(positions[0].Get()).Dy()*2 + u/2
+	default:
+		p.height = gl.CellBounds(positions[0].Get()).Dy()*4 + int(float64(u)*1.5)
+	}
+
+	for i := range p.buttons {
+		bounds := gl.CellBounds(positions[i].Get())
+		appender.AppendChildWidgetWithBounds(&p.buttons[i], bounds)
 	}
 
 	return nil
 }
 
+func (p *playButtons) Height() int {
+	return p.height
+}
+
 type playLinks struct {
 	guigui.DefaultWidget
 
-	websiteButton basicwidget.Button
-	githubButton  basicwidget.Button
-	discordButton basicwidget.Button
-	patreonButton basicwidget.Button
+	buttons [4]basicwidget.Button
 
-	model *p86l.Model
+	height int
+	model  *p86l.Model
 }
 
 func (p *playLinks) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
 	am := p.model.App()
 	dm := am.Debug()
 
-	img1, err1 := assets.TheImageCache.Get("ie")
-	img2, err2 := assets.TheImageCache.Get("github")
-	img3, err3 := assets.TheImageCache.Get("discord")
-	img4, err4 := assets.TheImageCache.Get("patreon")
-
-	if err := cmp.Or(err1, err2, err3, err4); err != nil {
-		am.SetError(err)
-		return err.Error()
+	buttonIcons := []string{"ie", "github", "discord", "patreon"}
+	buttonTexts := []string{"play.website", "play.github", "play.discord", "play.patreon"}
+	buttonActions := []func(){
+		func() { go p86l.OpenBrowser(dm, configs.Website) },
+		func() { go p86l.OpenBrowser(dm, configs.Github) },
+		func() { go p86l.OpenBrowser(dm, configs.Discord) },
+		func() { go p86l.OpenBrowser(dm, configs.Patreon) },
 	}
 
-	p.websiteButton.SetIcon(img1)
-	p.githubButton.SetIcon(img2)
-	p.discordButton.SetIcon(img3)
-	p.patreonButton.SetIcon(img4)
-
-	p.websiteButton.SetText(am.T("play.website"))
-	p.githubButton.SetText(am.T("play.github"))
-	p.discordButton.SetText(am.T("play.discord"))
-	p.patreonButton.SetText(am.T("play.patreon"))
-
-	p.websiteButton.SetOnDown(func() {
-		go p86l.OpenBrowser(dm, configs.Website)
-	})
-	p.githubButton.SetOnDown(func() {
-		go p86l.OpenBrowser(dm, configs.Github)
-	})
-	p.discordButton.SetOnDown(func() {
-		go p86l.OpenBrowser(dm, configs.Discord)
-	})
-	p.patreonButton.SetOnDown(func() {
-		go p86l.OpenBrowser(dm, configs.Patreon)
-	})
-
-	var gl layout.GridLayout
-	var bWebsiteButton breakWidget
-	var bGithubButton breakWidget
-	var bDiscordButton breakWidget
-	var bPatreonButton breakWidget
-
-	u := basicwidget.UnitSize(context)
-
-	if breakSize(context, 1024) {
-		gl = layout.GridLayout{
-			Bounds: context.Bounds(p),
-			Heights: []layout.Size{
-				layout.FixedSize(u * 2),
-				layout.FixedSize(u * 2),
-				layout.FixedSize(u * 2),
-				layout.FixedSize(u * 2),
-			},
-			Widths: []layout.Size{
-				layout.FlexibleSize(1),
-				layout.FlexibleSize(1),
-				layout.FlexibleSize(1),
-				layout.FlexibleSize(1),
-			},
-			RowGap:    u / 2,
-			ColumnGap: u / 2,
+	for i := range p.buttons {
+		img, err := assets.TheImageCache.Get(buttonIcons[i])
+		if err != nil {
+			am.SetError(pd.NotOk(err))
+			return err.Error()
 		}
-		bWebsiteButton.Set(0, 0)
-		bGithubButton.Set(1, 0)
-		bDiscordButton.Set(2, 0)
-		bPatreonButton.Set(3, 0)
-	} else if breakSize(context, 640) {
-		gl = layout.GridLayout{
-			Bounds: context.Bounds(p),
-			Heights: []layout.Size{
-				layout.FixedSize(u * 2),
-				layout.FixedSize(u * 2),
-			},
-			Widths: []layout.Size{
-				layout.FlexibleSize(1),
-				layout.FlexibleSize(1),
-			},
-			RowGap:    u / 2,
-			ColumnGap: u / 2,
-		}
-		bWebsiteButton.Set(0, 0)
-		bGithubButton.Set(0, 1)
-		bDiscordButton.Set(1, 0)
-		bPatreonButton.Set(1, 1)
-	} else {
-		gl = layout.GridLayout{
-			Bounds: context.Bounds(p),
-			Heights: []layout.Size{
-				layout.FlexibleSize(1),
-				layout.FlexibleSize(1),
-				layout.FlexibleSize(1),
-				layout.FlexibleSize(1),
-			},
-			RowGap:    u / 2,
-			ColumnGap: u / 2,
-		}
-		bWebsiteButton.Set(0, 0)
-		bGithubButton.Set(0, 1)
-		bDiscordButton.Set(0, 2)
-		bPatreonButton.Set(0, 3)
+
+		p.buttons[i].SetIcon(img)
+		p.buttons[i].SetText(am.T(buttonTexts[i]))
+		p.buttons[i].SetOnDown(buttonActions[i])
 	}
-	appender.AppendChildWidgetWithBounds(&p.websiteButton, gl.CellBounds(bWebsiteButton.Get()))
-	appender.AppendChildWidgetWithBounds(&p.githubButton, gl.CellBounds(bGithubButton.Get()))
-	appender.AppendChildWidgetWithBounds(&p.discordButton, gl.CellBounds(bDiscordButton.Get()))
-	appender.AppendChildWidgetWithBounds(&p.patreonButton, gl.CellBounds(bPatreonButton.Get()))
+
+	var (
+		u         = basicwidget.UnitSize(context)
+		widths    []layout.Size
+		heights   []layout.Size
+		positions [4]breakWidget
+	)
+
+	switch {
+	case breakSize(context, 1024):
+		widths = []layout.Size{
+			layout.FlexibleSize(1),
+			layout.FlexibleSize(1),
+			layout.FlexibleSize(1),
+			layout.FlexibleSize(1),
+		}
+		heights = []layout.Size{
+			layout.FixedSize(u * 2),
+		}
+		positions = [4]breakWidget{
+			{0, 0},
+			{1, 0},
+			{2, 0},
+			{3, 0},
+		}
+	case breakSize(context, 640):
+		widths = []layout.Size{
+			layout.FlexibleSize(1),
+			layout.FixedSize(u / 2),
+			layout.FlexibleSize(1),
+		}
+		heights = []layout.Size{
+			layout.FixedSize(u * 2),
+			layout.FixedSize(u * 2),
+		}
+		positions = [4]breakWidget{
+			{0, 0},
+			{0, 1},
+			{2, 0},
+			{2, 1},
+		}
+	default:
+		widths = []layout.Size{
+			layout.FlexibleSize(1),
+		}
+		heights = []layout.Size{
+			layout.FixedSize(int(float64(u) * 1.5)),
+			layout.FixedSize(int(float64(u) * 1.5)),
+			layout.FixedSize(int(float64(u) * 1.5)),
+			layout.FixedSize(int(float64(u) * 1.5)),
+		}
+		positions = [4]breakWidget{
+			{0, 0},
+			{0, 1},
+			{0, 2},
+			{0, 3},
+		}
+	}
+
+	doColumn := func() int {
+		if breakSize(context, 1024) {
+			return u / 2
+		}
+		return 0
+	}
+
+	gl := layout.GridLayout{
+		Bounds:    context.Bounds(p),
+		Widths:    widths,
+		Heights:   heights,
+		ColumnGap: doColumn(),
+		RowGap:    u / 2,
+	}
+
+	switch {
+	case breakSize(context, 1024):
+		p.height = gl.CellBounds(positions[0].Get()).Dy()
+	case breakSize(context, 640):
+		p.height = gl.CellBounds(positions[0].Get()).Dy()*2 + u/2
+	default:
+		p.height = gl.CellBounds(positions[0].Get()).Dy()*4 + int(float64(u)*1.5)
+	}
+
+	for i := range p.buttons {
+		bounds := gl.CellBounds(positions[i].Get())
+		appender.AppendChildWidgetWithBounds(&p.buttons[i], bounds)
+	}
 
 	return nil
+}
+
+func (p *playLinks) Height() int {
+	return p.height
 }

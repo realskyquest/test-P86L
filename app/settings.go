@@ -27,6 +27,7 @@ import (
 	"p86l/configs"
 	pd "p86l/internal/debug"
 	"path/filepath"
+	"sync"
 
 	"github.com/hajimehoshi/guigui"
 	"github.com/hajimehoshi/guigui/basicwidget"
@@ -80,7 +81,8 @@ type settingsContent struct {
 	height int
 	model  *p86l.Model
 
-	err *pd.Error
+	sync   sync.Once
+	result pd.Result
 }
 
 func (s *settingsContent) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
@@ -90,9 +92,13 @@ func (s *settingsContent) Build(context *guigui.Context, appender *guigui.ChildW
 	data := s.model.Data()
 	cache := s.model.Cache()
 
-	if s.err != nil {
-		am.SetError(s.err)
-		return s.err.Error()
+	s.sync.Do(func() {
+		s.result = pd.Ok()
+	})
+
+	if !s.result.Ok {
+		am.SetError(s.result)
+		return s.result.Err.Error()
 	}
 
 	s.localeText.SetValue(am.T("settings.locale"))
@@ -109,12 +115,15 @@ func (s *settingsContent) Build(context *guigui.Context, appender *guigui.ChildW
 		if item.ID == language.English {
 			data.SetLocale(am, context, language.English)
 			context.SetAppLocales(nil)
-			s.err = data.Save(am)
+			s.result = data.Save(am)
 			return
 		}
 		data.SetLocale(am, context, item.ID)
 		cache.SetChangelog(am, item.ID.String())
-		s.err = data.Save(am)
+		result := data.Save(am)
+		if !s.result.Ok {
+			s.result = result
+		}
 	})
 	if !s.localeDropdownList.IsPopupOpen() {
 		if locales := context.AppendAppLocales(nil); len(locales) > 0 {
@@ -130,7 +139,10 @@ func (s *settingsContent) Build(context *guigui.Context, appender *guigui.ChildW
 		} else {
 			data.SetColorMode(dm, context, guigui.ColorModeLight)
 		}
-		s.err = data.Save(am)
+		result := data.Save(am)
+		if !result.Ok {
+			s.result = result
+		}
 	})
 	switch context.ColorMode() {
 	case guigui.ColorModeLight:
@@ -170,7 +182,10 @@ func (s *settingsContent) Build(context *guigui.Context, appender *guigui.ChildW
 			return
 		}
 		data.SetAppScale(dm, context, item.ID)
-		s.err = data.Save(am)
+		result := data.Save(am)
+		if !result.Ok {
+			s.result = result
+		}
 	})
 	s.scaleSegmentedControl.SelectItemByID(data.File().AppScale)
 
@@ -196,14 +211,15 @@ func (s *settingsContent) Build(context *guigui.Context, appender *guigui.ChildW
 	s.dataButton.SetOnDown(func() {
 		d := p86l.NewData()
 		data.SetFile(am, d)
-		err := p86l.LoadB(am, context, s.model, "data")
-		if err != nil {
-			dm.SetPopup(err)
+		result := p86l.LoadB(am, context, s.model, "data")
+		if !result.Ok {
+			dm.SetPopup(result.Err, pd.FileManager)
 		}
 	})
 	s.cacheButton.SetOnDown(func() {
 		cache.SetValid(false)
 		cache.SetProgress(false)
+		s.model.Ratelimit().SetLimit(nil)
 	})
 
 	s.form.SetItems([]basicwidget.FormItem{
