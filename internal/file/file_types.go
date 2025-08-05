@@ -28,7 +28,6 @@ import (
 
 	"github.com/google/go-github/v71/github"
 	"github.com/hajimehoshi/guigui"
-	"github.com/rs/zerolog/log"
 )
 
 type Data struct {
@@ -59,27 +58,32 @@ func (d *Data) Log(dm *pd.Debug) {
 }
 
 type Cache struct {
-	V         int                       `json:"v"`
-	Repo      *github.RepositoryRelease `json:"repo"`
-	Timestamp time.Time                 `json:"time_stamp"`
-	ExpiresIn time.Duration             `json:"expires_in"`
+	V            int                       `json:"v"`
+	Repo         *github.RepositoryRelease `json:"repo"`
+	Timestamp    time.Time                 `json:"time_stamp"`
+	ExpiresIn    time.Duration             `json:"expires_in"`
+	PreRepo      *github.RepositoryRelease `json:"pre_repo"`
+	PreTimestamp time.Time                 `json:"pre_time_stamp"`
+	PreExpiresIn time.Duration             `json:"pre_expires_in"`
 }
 
-func (c *Cache) Log() {
+func (c *Cache) Log(dm *pd.Debug) {
+	log := dm.Log()
+
 	log.Info().Any("Changelog", c.Repo.GetBody()).Any("Timestamp", c.Timestamp).Any("ExpiresIn", c.ExpiresIn).Msg("FileManager")
 }
 
-func (c *Cache) Validate(appDebug *pd.Debug) pd.Result {
-	if c.Repo == nil {
+func (c *Cache) Validate(ghRepo *github.RepositoryRelease) pd.Result {
+	if ghRepo == nil {
 		return pd.NotOk(pd.New(errors.New("repo is empty"), pd.CacheError, pd.ErrCacheInvalid))
 	}
-	if c.Repo.GetBody() == "" {
+	if ghRepo.GetBody() == "" {
 		return pd.NotOk(pd.New(errors.New("body is empty"), pd.CacheError, pd.ErrCacheBodyInvalid))
 	}
-	if c.Repo.GetHTMLURL() == "" {
-		return pd.NotOk(pd.New(errors.New("URL is empty"), pd.CacheError, pd.ErrCacheURLInvalid))
+	if ghRepo.GetHTMLURL() == "" {
+		return pd.NotOk(pd.New(errors.New("htmlurl is empty"), pd.CacheError, pd.ErrCacheURLInvalid))
 	}
-	if len(c.Repo.Assets) < 1 {
+	if len(ghRepo.Assets) < 1 {
 		return pd.NotOk(pd.New(errors.New("assets are empty"), pd.CacheError, pd.ErrCacheAssetsInvalid))
 	}
 
