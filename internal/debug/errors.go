@@ -47,6 +47,8 @@ const (
 	ErrGameVersionInvalid
 	ErrGameNotExist
 	ErrGameRunning
+
+	ErrGitHubNoPreRelease
 )
 
 const (
@@ -108,5 +110,6 @@ const (
 	ErrNetworkLatestInvalid
 	ErrNetworkCacheRequest
 	ErrNetworkDownloadRequest
+	ErrNetworkPrereleaseRequest
 	ErrNetworkStatusNotOk
 )
