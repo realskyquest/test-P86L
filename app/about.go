@@ -39,16 +39,13 @@ type About struct {
 
 	panel   basicwidget.Panel
 	content aboutContent
-
-	model *p86l.Model
 }
 
-func (a *About) SetModel(m *p86l.Model) {
-	a.model = m
-	a.content.model = m
+func (a *About) AppendChildWidgets(context *guigui.Context, appender *guigui.ChildWidgetAppender) {
+	appender.AppendChildWidget(&a.panel)
 }
 
-func (a *About) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
+func (a *About) Build(context *guigui.Context) error {
 	bounds := context.Bounds(a)
 	contentHeight := a.content.Height()
 
@@ -60,8 +57,7 @@ func (a *About) Build(context *guigui.Context, appender *guigui.ChildWidgetAppen
 	}
 	context.SetSize(&a.content, contentSize, a)
 	a.panel.SetContent(&a.content)
-
-	appender.AppendChildWidgetWithBounds(&a.panel, context.Bounds(a))
+	context.SetBounds(&a.panel, context.Bounds(a), a)
 
 	return nil
 }
@@ -81,11 +77,23 @@ type aboutContent struct {
 	box2   basicwidget.Background
 	box3   basicwidget.Background
 	height int
-	model  *p86l.Model
 }
 
-func (a *aboutContent) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
-	am := a.model.App()
+func (a *aboutContent) AppendChildWidgets(context *guigui.Context, appender *guigui.ChildWidgetAppender) {
+	model := context.Model(a, modelKeyModel).(*p86l.Model)
+	am := model.App()
+
+	am.RenderBox(appender, &a.box1)
+	am.RenderBox(appender, &a.box2)
+	am.RenderBox(appender, &a.box3)
+	appender.AppendChildWidget(&a.aboutText)
+	appender.AppendChildWidget(&a.form)
+	appender.AppendChildWidget(&a.licenseText)
+}
+
+func (a *aboutContent) Build(context *guigui.Context) error {
+	model := context.Model(a, modelKeyModel).(*p86l.Model)
+	am := model.App()
 
 	img1, err1 := assets.TheImageCache.Get("lead")
 	img2, err2 := assets.TheImageCache.Get("dev")
@@ -144,13 +152,13 @@ func (a *aboutContent) Build(context *guigui.Context, appender *guigui.ChildWidg
 		},
 		RowGap: u / 2,
 	}
+	context.SetBounds(&a.box1, gl.CellBounds(0, 0), a)
+	context.SetBounds(&a.box2, gl.CellBounds(0, 1), a)
+	context.SetBounds(&a.box3, gl.CellBounds(0, 3), a)
 	a.height = gl.CellBounds(0, 0).Dy() + gl.CellBounds(0, 1).Dy() + gl.CellBounds(0, 3).Dy() + u*2
-	am.RenderBox(appender, &a.box1, gl.CellBounds(0, 0))
-	am.RenderBox(appender, &a.box2, gl.CellBounds(0, 1))
-	am.RenderBox(appender, &a.box3, gl.CellBounds(0, 3))
-	appender.AppendChildWidgetWithBounds(&a.aboutText, gl.CellBounds(0, 0))
-	appender.AppendChildWidgetWithBounds(&a.form, gl.CellBounds(0, 1))
-	appender.AppendChildWidgetWithBounds(&a.licenseText, gl.CellBounds(0, 3))
+	context.SetBounds(&a.aboutText, gl.CellBounds(0, 0), a)
+	context.SetBounds(&a.form, gl.CellBounds(0, 1), a)
+	context.SetBounds(&a.licenseText, gl.CellBounds(0, 3), a)
 
 	return nil
 }

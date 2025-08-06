@@ -22,7 +22,6 @@
 package p86l
 
 import (
-	"image"
 	pd "p86l/internal/debug"
 	"p86l/internal/file"
 
@@ -98,9 +97,9 @@ func (a *AppModel) BoxesEnabled() bool {
 	return a.box
 }
 
-func (a *AppModel) RenderBox(appender *guigui.ChildWidgetAppender, widget *basicwidget.Background, bounds image.Rectangle) {
+func (a *AppModel) RenderBox(appender *guigui.ChildWidgetAppender, widget *basicwidget.Background) {
 	if a.BoxesEnabled() {
-		appender.AppendChildWidgetWithBounds(widget, bounds)
+		appender.AppendChildWidget(widget)
 	}
 }
 

@@ -37,18 +37,18 @@ type Home struct {
 
 	content homeContent
 
-	box   basicwidget.Background
-	model *p86l.Model
+	box basicwidget.Background
 }
 
-func (h *Home) SetModel(model *p86l.Model) {
-	h.model = model
-	h.content.model = model
+func (h *Home) AppendChildWidgets(context *guigui.Context, appender *guigui.ChildWidgetAppender) {
+	model := context.Model(h, modelKeyModel).(*p86l.Model)
+	am := model.App()
+
+	am.RenderBox(appender, &h.box)
+	appender.AppendChildWidget(&h.content)
 }
 
-func (h *Home) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
-	am := h.model.App()
-
+func (h *Home) Build(context *guigui.Context) error {
 	u := basicwidget.UnitSize(context)
 	gl := layout.GridLayout{
 		Bounds: context.Bounds(h),
@@ -60,8 +60,8 @@ func (h *Home) Build(context *guigui.Context, appender *guigui.ChildWidgetAppend
 			layout.FixedSize(h.content.Height() + u),
 		},
 	}
-	am.RenderBox(appender, &h.box, gl.CellBounds(0, 0))
-	appender.AppendChildWidgetWithBounds(&h.content, gl.CellBounds(0, 1))
+	context.SetBounds(&h.box, gl.CellBounds(0, 0), h)
+	context.SetBounds(&h.content, gl.CellBounds(0, 1), h)
 
 	return nil
 }
@@ -87,13 +87,25 @@ type homeContent struct {
 	box1   basicwidget.Background
 	box2   basicwidget.Background
 	height int
-	model  *p86l.Model
 }
 
-func (h *homeContent) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
-	am := h.model.App()
-	data := h.model.Data()
-	cache := h.model.Cache()
+func (h *homeContent) AppendChildWidgets(context *guigui.Context, appender *guigui.ChildWidgetAppender) {
+	model := context.Model(h, modelKeyModel).(*p86l.Model)
+	am := model.App()
+
+	am.RenderBox(appender, &h.box1)
+	am.RenderBox(appender, &h.box2)
+	appender.AppendChildWidget(&h.background)
+	appender.AppendChildWidget(&h.p86lImage)
+	appender.AppendChildWidget(&h.form1)
+	appender.AppendChildWidget(&h.form2)
+}
+
+func (h *homeContent) Build(context *guigui.Context) error {
+	model := context.Model(h, modelKeyModel).(*p86l.Model)
+	am := model.App()
+	data := model.Data()
+	cache := model.Cache()
 	cacheAssets := cache.File().Repo.Assets
 
 	img, err := assets.TheImageCache.Get("p86l")
@@ -166,13 +178,13 @@ func (h *homeContent) Build(context *guigui.Context, appender *guigui.ChildWidge
 			layout.FlexibleSize(1),
 		},
 	}
-	am.RenderBox(appender, &h.box1, gl.CellBounds(1, 0).Inset(u/2))
-	am.RenderBox(appender, &h.box2, gl.CellBounds(2, 0).Inset(u/2))
+	context.SetBounds(&h.box1, gl.CellBounds(1, 0).Inset(u/2), h)
+	context.SetBounds(&h.box2, gl.CellBounds(2, 0).Inset(u/2), h)
 	h.height = max(h.form1.DefaultSizeInContainer(context, context.Bounds(h).Dx()-u).Y, h.form2.DefaultSizeInContainer(context, context.Bounds(h).Dx()).Y)
-	appender.AppendChildWidgetWithBounds(&h.background, context.Bounds(h))
-	appender.AppendChildWidgetWithBounds(&h.p86lImage, gl.CellBounds(0, 0))
-	appender.AppendChildWidgetWithBounds(&h.form1, gl.CellBounds(1, 0).Inset(u/2))
-	appender.AppendChildWidgetWithBounds(&h.form2, gl.CellBounds(2, 0).Inset(u/2))
+	context.SetBounds(&h.background, context.Bounds(h), h)
+	context.SetBounds(&h.p86lImage, gl.CellBounds(0, 0), h)
+	context.SetBounds(&h.form1, gl.CellBounds(1, 0).Inset(u/2), h)
+	context.SetBounds(&h.form2, gl.CellBounds(2, 0).Inset(u/2), h)
 
 	return nil
 }

@@ -42,9 +42,8 @@ func main() {
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
 	zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
 
-	result, newRoot := app.NewRoot(version)
-
-	am := newRoot.Model().App()
+	result, newRoot, model := app.NewRoot(version)
+	am := model.App()
 	dm := am.Debug()
 	fs := am.FileSystem()
 

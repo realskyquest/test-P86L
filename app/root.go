@@ -42,6 +42,12 @@ import (
 	i18n "github.com/nicksnyder/go-i18n/v2/i18n"
 )
 
+type modelKey int
+
+const (
+	modelKeyModel modelKey = iota
+)
+
 type Root struct {
 	guigui.DefaultWidget
 
@@ -53,38 +59,34 @@ type Root struct {
 	settings   Settings
 	about      About
 
+	popupDebounce bool
 	popup         basicwidget.Popup
 	popupContent  rootPopupContent
-	popupDebounce bool
 
 	lastTick int64
-	model    p86l.Model
+	rlResult chan ratelimitResult
+	ghResult chan githubResult
+
+	model p86l.Model
 
 	locales           []language.Tag
 	faceSourceEntries []basicwidget.FaceSourceEntry
-
-	rlResult chan ratelimitResult
-	ghResult chan githubResult
 
 	sync   sync.Once
 	result pd.Result
 }
 
-func NewRoot(version string) (pd.Result, *Root) {
+func NewRoot(version string) (pd.Result, *Root, *p86l.Model) {
 	r := &Root{}
 	am := r.model.App()
 
 	am.SetPlainVersion(version)
 	result := am.SetFileSystem()
 	if !result.Ok {
-		return result, nil
+		return result, nil, nil
 	}
 
-	return pd.Ok(), r
-}
-
-func (r *Root) Model() *p86l.Model {
-	return &r.model
+	return pd.Ok(), r, &r.model
 }
 
 func (r *Root) runApp() pd.Result {
@@ -116,11 +118,39 @@ func (r *Root) updateFontFaceSources(context *guigui.Context) {
 	basicwidget.SetFaceSources(r.faceSourceEntries)
 }
 
-func (r *Root) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
+func (r *Root) Model(key any) any {
+	switch key {
+	case modelKeyModel:
+		return &r.model
+	default:
+		return nil
+	}
+}
+
+func (r *Root) AppendChildWidgets(context *guigui.Context, appender *guigui.ChildWidgetAppender) {
+	appender.AppendChildWidget(&r.background)
+	appender.AppendChildWidget(&r.sidebar)
+	switch r.model.Mode() {
+	case "home":
+		appender.AppendChildWidget(&r.home)
+	case "play":
+		appender.AppendChildWidget(&r.play)
+	case "changelog":
+		appender.AppendChildWidget(&r.changelog)
+	case "settings":
+		appender.AppendChildWidget(&r.settings)
+	case "about":
+		appender.AppendChildWidget(&r.about)
+	}
+	appender.AppendChildWidget(&r.popup)
+}
+
+func (r *Root) Build(context *guigui.Context) error {
 	am := r.model.App()
 	dm := am.Debug()
 	log := dm.Log()
 	data := r.model.Data()
+	cache := r.model.Cache()
 
 	r.sync.Do(func() {
 		var gpuInfo ebiten.DebugInfo
@@ -148,7 +178,7 @@ func (r *Root) Build(context *guigui.Context, appender *guigui.ChildWidgetAppend
 		log.Info().Str("Graphics API", gpuInfo.GraphicsLibrary.String()).Msg("GPU")
 		log.Warn().Str("LICENSE", am.License()).Msg("README")
 
-		r.model.Cache().SetChangelog(am, data.File().Locale)
+		cache.SetChangelog(am, data.File().Locale)
 
 		if data.File().WindowX > 0 || data.File().WindowY > 0 {
 			ebiten.SetWindowPosition(data.File().WindowX, data.File().WindowY)
@@ -174,16 +204,6 @@ func (r *Root) Build(context *guigui.Context, appender *guigui.ChildWidgetAppend
 		r.result = data.Save(am)
 	}
 
-	r.popupContent.model = &r.model
-	r.background.model = &r.model
-
-	r.sidebar.SetModel(&r.model)
-	r.home.SetModel(&r.model)
-	r.play.SetModel(&r.model)
-	r.changelog.SetModel(&r.model)
-	r.settings.SetModel(&r.model)
-	r.about.SetModel(&r.model)
-
 	u := basicwidget.UnitSize(context)
 	gl := layout.GridLayout{
 		Bounds: context.Bounds(r),
@@ -194,21 +214,21 @@ func (r *Root) Build(context *guigui.Context, appender *guigui.ChildWidgetAppend
 	}
 	r.background.SetSidebar(&r.sidebar)
 	r.background.SetBgBounds(gl.CellBounds(1, 0))
-	appender.AppendChildWidgetWithBounds(&r.background, context.Bounds(r))
+	context.SetBounds(&r.background, context.Bounds(r), r)
 
-	appender.AppendChildWidgetWithBounds(&r.sidebar, gl.CellBounds(0, 0))
+	context.SetBounds(&r.sidebar, gl.CellBounds(0, 0), r)
 
 	switch r.model.Mode() {
 	case "home":
-		appender.AppendChildWidgetWithBounds(&r.home, gl.CellBounds(1, 0))
+		context.SetBounds(&r.home, gl.CellBounds(1, 0), r)
 	case "play":
-		appender.AppendChildWidgetWithBounds(&r.play, gl.CellBounds(1, 0))
+		context.SetBounds(&r.play, gl.CellBounds(1, 0), r)
 	case "changelog":
-		appender.AppendChildWidgetWithBounds(&r.changelog, gl.CellBounds(1, 0))
+		context.SetBounds(&r.changelog, gl.CellBounds(1, 0), r)
 	case "settings":
-		appender.AppendChildWidgetWithBounds(&r.settings, gl.CellBounds(1, 0))
+		context.SetBounds(&r.settings, gl.CellBounds(1, 0), r)
 	case "about":
-		appender.AppendChildWidgetWithBounds(&r.about, gl.CellBounds(1, 0))
+		context.SetBounds(&r.about, gl.CellBounds(1, 0), r)
 	}
 
 	// -- popup --
@@ -239,7 +259,7 @@ func (r *Root) Build(context *guigui.Context, appender *guigui.ChildWidgetAppend
 		Max: popupPosition.Add(contentSize),
 	}
 	context.SetSize(&r.popupContent, popupBounds.Size(), r)
-	appender.AppendChildWidgetWithBounds(&r.popup, popupBounds)
+	context.SetBounds(&r.popup, popupBounds, r)
 
 	return nil
 }

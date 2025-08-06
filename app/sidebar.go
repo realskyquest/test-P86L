@@ -39,11 +39,11 @@ type Sidebar struct {
 	panelContent sidebarContent
 }
 
-func (s *Sidebar) SetModel(model *p86l.Model) {
-	s.panelContent.SetModel(model)
+func (s *Sidebar) AppendChildWidgets(context *guigui.Context, appender *guigui.ChildWidgetAppender) {
+	appender.AppendChildWidget(&s.panel)
 }
 
-func (s *Sidebar) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
+func (s *Sidebar) Build(context *guigui.Context) error {
 	context.SetOpacity(&s.panel, 0.9)
 	s.panel.SetStyle(basicwidget.PanelStyleSide)
 	s.panel.SetBorder(basicwidget.PanelBorder{
@@ -52,7 +52,7 @@ func (s *Sidebar) Build(context *guigui.Context, appender *guigui.ChildWidgetApp
 	context.SetSize(&s.panelContent, context.ActualSize(s), s)
 	s.panel.SetContent(&s.panelContent)
 
-	appender.AppendChildWidgetWithBounds(&s.panel, context.Bounds(s))
+	context.SetBounds(&s.panel, context.Bounds(s), s)
 
 	return nil
 }
@@ -62,56 +62,55 @@ type sidebarContent struct {
 
 	list  basicwidget.List[string]
 	stats sidebarStats
-
-	model *p86l.Model
 }
 
-func (s *sidebarContent) SetModel(model *p86l.Model) {
-	s.model = model
+func (s *sidebarContent) AppendChildWidgets(context *guigui.Context, appender *guigui.ChildWidgetAppender) {
+	appender.AppendChildWidget(&s.list)
+	appender.AppendChildWidget(&s.stats)
 }
 
-func (s *sidebarContent) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
-	am := s.model.App()
+func (s *sidebarContent) Build(context *guigui.Context) error {
+	model := context.Model(s, modelKeyModel).(*p86l.Model)
+	am := model.App()
 
-	s.stats.model = s.model
 	s.list.SetStyle(basicwidget.ListStyleSidebar)
 
 	items := []basicwidget.ListItem[string]{
 		{
-			Text: am.T("home.title"),
-			ID:   "home",
+			Text:  am.T("home.title"),
+			Value: "home",
 		},
 		{
-			Text: am.T("play.title"),
-			ID:   "play",
+			Text:  am.T("play.title"),
+			Value: "play",
 		},
 		{
-			Text: am.T("changelog.title"),
-			ID:   "changelog",
+			Text:  am.T("changelog.title"),
+			Value: "changelog",
 		},
 		{
-			Text: am.T("settings.title"),
-			ID:   "settings",
+			Text:  am.T("settings.title"),
+			Value: "settings",
 		},
 		{
-			Text: am.T("about.title"),
-			ID:   "about",
+			Text:  am.T("about.title"),
+			Value: "about",
 		},
 	}
 
 	s.list.SetItems(items)
-	s.list.SelectItemByID(s.model.Mode())
+	s.list.SelectItemByValue(model.Mode())
 	s.list.SetItemHeight(basicwidget.UnitSize(context))
 	s.list.SetOnItemSelected(func(index int) {
 		item, ok := s.list.ItemByIndex(index)
 		if !ok {
-			s.model.SetMode("")
+			model.SetMode("")
 			return
 		}
-		if item.ID == s.model.Mode() {
+		if item.Value == model.Mode() {
 			return
 		}
-		s.model.SetMode(item.ID)
+		model.SetMode(item.Value)
 	})
 
 	gl := layout.GridLayout{
@@ -121,8 +120,8 @@ func (s *sidebarContent) Build(context *guigui.Context, appender *guigui.ChildWi
 			layout.FlexibleSize(3),
 		},
 	}
-	appender.AppendChildWidgetWithBounds(&s.list, gl.CellBounds(0, 0))
-	appender.AppendChildWidgetWithBounds(&s.stats, gl.CellBounds(0, 1))
+	context.SetBounds(&s.list, gl.CellBounds(0, 0), s)
+	context.SetBounds(&s.stats, gl.CellBounds(0, 1), s)
 
 	return nil
 }
@@ -134,16 +133,22 @@ type sidebarStats struct {
 	toastTextInput basicwidget.TextInput
 	versionText    basicwidget.Text
 	ratelimitText  basicwidget.Text
-
-	model *p86l.Model
 }
 
-func (s *sidebarStats) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
-	am := s.model.App()
-	dm := am.Debug()
-	rlm := s.model.Ratelimit()
+func (s *sidebarStats) AppendChildWidgets(context *guigui.Context, appender *guigui.ChildWidgetAppender) {
+	appender.AppendChildWidget(&s.progressText)
+	appender.AppendChildWidget(&s.toastTextInput)
+	appender.AppendChildWidget(&s.versionText)
+	appender.AppendChildWidget(&s.ratelimitText)
+}
 
-	s.progressText.SetValue(s.model.Progress())
+func (s *sidebarStats) Build(context *guigui.Context) error {
+	model := context.Model(s, modelKeyModel).(*p86l.Model)
+	am := model.App()
+	dm := am.Debug()
+	rlm := model.Ratelimit()
+
+	s.progressText.SetValue(model.Progress())
 	s.progressText.SetAutoWrap(true)
 
 	if toast := dm.Toast(); toast != nil {
@@ -185,10 +190,10 @@ func (s *sidebarStats) Build(context *guigui.Context, appender *guigui.ChildWidg
 		},
 		RowGap: u / 2,
 	}
-	appender.AppendChildWidgetWithBounds(&s.progressText, gl.CellBounds(1, 0))
-	appender.AppendChildWidgetWithBounds(&s.toastTextInput, gl.CellBounds(1, 1))
-	appender.AppendChildWidgetWithBounds(&s.versionText, gl.CellBounds(1, 2))
-	appender.AppendChildWidgetWithBounds(&s.ratelimitText, gl.CellBounds(1, 3))
+	context.SetBounds(&s.progressText, gl.CellBounds(1, 0), s)
+	context.SetBounds(&s.toastTextInput, gl.CellBounds(1, 1), s)
+	context.SetBounds(&s.versionText, gl.CellBounds(1, 2), s)
+	context.SetBounds(&s.ratelimitText, gl.CellBounds(1, 3), s)
 
 	return nil
 }

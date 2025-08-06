@@ -35,20 +35,16 @@ type Changelog struct {
 
 	panel   basicwidget.Panel
 	content changelogContent
-
-	model *p86l.Model
 }
 
-func (c *Changelog) SetModel(model *p86l.Model) {
-	c.model = model
-	c.content.model = model
+func (c *Changelog) AppendChildWidgets(context *guigui.Context, appender *guigui.ChildWidgetAppender) {
+	appender.AppendChildWidget(&c.panel)
 }
 
-func (c *Changelog) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
+func (c *Changelog) Build(context *guigui.Context) error {
 	context.SetSize(&c.content, image.Pt(context.ActualSize(c).X, c.content.Height()), c)
 	c.panel.SetContent(&c.content)
-
-	appender.AppendChildWidgetWithBounds(&c.panel, context.Bounds(c))
+	context.SetBounds(&c.panel, context.Bounds(c), c)
 
 	return nil
 }
@@ -64,21 +60,33 @@ type changelogContent struct {
 	box1   basicwidget.Background
 	box2   basicwidget.Background
 	height int
-	model  *p86l.Model
 }
 
-func (c *changelogContent) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
-	am := c.model.App()
+func (c *changelogContent) AppendChildWidgets(context *guigui.Context, appender *guigui.ChildWidgetAppender) {
+	model := context.Model(c, modelKeyModel).(*p86l.Model)
+	am := model.App()
+
+	am.RenderBox(appender, &c.box1)
+	am.RenderBox(appender, &c.box2)
+	appender.AppendChildWidget(&c.text)
+	appender.AppendChildWidget(&c.form)
+}
+
+func (c *changelogContent) Build(context *guigui.Context) error {
+	model := context.Model(c, modelKeyModel).(*p86l.Model)
+	am := model.App()
 	dm := am.Debug()
+	data := model.Data()
+	cache := model.Cache()
 
 	c.text.SetHorizontalAlign(basicwidget.HorizontalAlignCenter)
 	c.text.SetVerticalAlign(basicwidget.VerticalAlignMiddle)
 	c.text.SetAutoWrap(true)
 
 	// IsValid
-	if cache := c.model.Cache(); cache.IsValid() {
+	if cache.IsValid() {
 		// If not english, get translation
-		if locale := c.model.Data().File().Locale; locale != "en" {
+		if locale := data.File().Locale; locale != "en" {
 			// If there is no translation, output "..."
 			if changelog := cache.Changelog(); changelog == "" {
 				c.text.SetValue("...")
@@ -119,11 +127,11 @@ func (c *changelogContent) Build(context *guigui.Context, appender *guigui.Child
 		},
 		RowGap: u / 2,
 	}
+	context.SetBounds(&c.box1, gl.CellBounds(0, 0), c)
+	context.SetBounds(&c.box2, gl.CellBounds(0, 1), c)
 	c.height = gl.CellBounds(0, 0).Dy() + gl.CellBounds(0, 1).Dy() + u*2
-	am.RenderBox(appender, &c.box1, gl.CellBounds(0, 0))
-	am.RenderBox(appender, &c.box2, gl.CellBounds(0, 1))
-	appender.AppendChildWidgetWithBounds(&c.text, gl.CellBounds(0, 0))
-	appender.AppendChildWidgetWithBounds(&c.form, gl.CellBounds(0, 1))
+	context.SetBounds(&c.text, gl.CellBounds(0, 0), c)
+	context.SetBounds(&c.form, gl.CellBounds(0, 1), c)
 
 	return nil
 }

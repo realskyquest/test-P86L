@@ -39,20 +39,16 @@ type Settings struct {
 
 	panel   basicwidget.Panel
 	content settingsContent
-
-	model *p86l.Model
 }
 
-func (s *Settings) SetModel(model *p86l.Model) {
-	s.model = model
-	s.content.model = s.model
+func (s *Settings) AppendChildWidgets(context *guigui.Context, appender *guigui.ChildWidgetAppender) {
+	appender.AppendChildWidget(&s.panel)
 }
 
-func (s *Settings) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
+func (s *Settings) Build(context *guigui.Context) error {
 	context.SetSize(&s.content, image.Pt(context.ActualSize(s).X, s.content.Height()), s)
 	s.panel.SetContent(&s.content)
-
-	appender.AppendChildWidgetWithBounds(&s.panel, context.Bounds(s))
+	context.SetBounds(&s.panel, context.Bounds(s), s)
 
 	return nil
 }
@@ -79,18 +75,26 @@ type settingsContent struct {
 
 	box    basicwidget.Background
 	height int
-	model  *p86l.Model
 
 	sync   sync.Once
 	result pd.Result
 }
 
-func (s *settingsContent) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
-	am := s.model.App()
+func (s *settingsContent) AppendChildWidgets(context *guigui.Context, appender *guigui.ChildWidgetAppender) {
+	model := context.Model(s, modelKeyModel).(*p86l.Model)
+	am := model.App()
+
+	am.RenderBox(appender, &s.box)
+	appender.AppendChildWidget(&s.form)
+}
+
+func (s *settingsContent) Build(context *guigui.Context) error {
+	model := context.Model(s, modelKeyModel).(*p86l.Model)
+	am := model.App()
 	dm := am.Debug()
 	fs := am.FileSystem()
-	data := s.model.Data()
-	cache := s.model.Cache()
+	data := model.Data()
+	cache := model.Cache()
 
 	s.sync.Do(func() {
 		s.result = pd.Ok()
@@ -112,14 +116,14 @@ func (s *settingsContent) Build(context *guigui.Context, appender *guigui.ChildW
 			context.SetAppLocales(nil)
 			return
 		}
-		if item.ID == language.English {
+		if item.Value == language.English {
 			data.SetLocale(am, context, language.English)
 			context.SetAppLocales(nil)
 			s.result = data.Save(am)
 			return
 		}
-		data.SetLocale(am, context, item.ID)
-		cache.SetChangelog(am, item.ID.String())
+		data.SetLocale(am, context, item.Value)
+		cache.SetChangelog(am, item.Value.String())
 		result := data.Save(am)
 		if !s.result.Ok {
 			s.result = result
@@ -127,9 +131,9 @@ func (s *settingsContent) Build(context *guigui.Context, appender *guigui.ChildW
 	})
 	if !s.localeDropdownList.IsPopupOpen() {
 		if locales := context.AppendAppLocales(nil); len(locales) > 0 {
-			s.localeDropdownList.SelectItemByID(locales[0])
+			s.localeDropdownList.SelectItemByValue(locales[0])
 		} else {
-			s.localeDropdownList.SelectItemByID(language.English)
+			s.localeDropdownList.SelectItemByValue(language.English)
 		}
 	}
 
@@ -155,24 +159,24 @@ func (s *settingsContent) Build(context *guigui.Context, appender *guigui.ChildW
 
 	s.scaleSegmentedControl.SetItems([]basicwidget.SegmentedControlItem[int]{
 		{
-			Text: "50%",
-			ID:   0,
+			Text:  "50%",
+			Value: 0,
 		},
 		{
-			Text: "75%",
-			ID:   1,
+			Text:  "75%",
+			Value: 1,
 		},
 		{
-			Text: "100%",
-			ID:   2,
+			Text:  "100%",
+			Value: 2,
 		},
 		{
-			Text: "125%",
-			ID:   3,
+			Text:  "125%",
+			Value: 3,
 		},
 		{
-			Text: "150%",
-			ID:   4,
+			Text:  "150%",
+			Value: 4,
 		},
 	})
 	s.scaleSegmentedControl.SetOnItemSelected(func(index int) {
@@ -181,13 +185,13 @@ func (s *settingsContent) Build(context *guigui.Context, appender *guigui.ChildW
 			data.SetAppScale(dm, context, 2)
 			return
 		}
-		data.SetAppScale(dm, context, item.ID)
+		data.SetAppScale(dm, context, item.Value)
 		result := data.Save(am)
 		if !result.Ok {
 			s.result = result
 		}
 	})
-	s.scaleSegmentedControl.SelectItemByID(data.File().AppScale)
+	s.scaleSegmentedControl.SelectItemByValue(data.File().AppScale)
 
 	s.companyFolderText.SetValue(am.T("settings.company"))
 	s.companyFolderButton.SetText(am.T("common.open"))
@@ -211,7 +215,7 @@ func (s *settingsContent) Build(context *guigui.Context, appender *guigui.ChildW
 	s.dataButton.SetOnDown(func() {
 		d := p86l.NewData()
 		data.SetFile(am, d)
-		result := p86l.LoadB(am, context, s.model, "data")
+		result := p86l.LoadB(am, context, model, "data")
 		if !result.Ok {
 			dm.SetPopup(result.Err, pd.FileManager)
 		}
@@ -219,7 +223,7 @@ func (s *settingsContent) Build(context *guigui.Context, appender *guigui.ChildW
 	s.cacheButton.SetOnDown(func() {
 		cache.SetValid(false)
 		cache.SetProgress(false)
-		s.model.Ratelimit().SetLimit(nil)
+		model.Ratelimit().SetLimit(nil)
 	})
 
 	s.form.SetItems([]basicwidget.FormItem{
@@ -251,9 +255,9 @@ func (s *settingsContent) Build(context *guigui.Context, appender *guigui.ChildW
 		},
 	})
 	u := basicwidget.UnitSize(context)
+	context.SetBounds(&s.box, context.Bounds(s).Inset(u/2), s)
 	s.height = s.form.DefaultSizeInContainer(context, context.Bounds(s).Inset(u/2).Dx()-u).Y + u
-	am.RenderBox(appender, &s.box, context.Bounds(s).Inset(u/2))
-	appender.AppendChildWidgetWithBounds(&s.form, context.Bounds(s).Inset(u/2))
+	context.SetBounds(&s.form, context.Bounds(s).Inset(u/2), s)
 
 	return nil
 }

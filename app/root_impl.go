@@ -63,7 +63,6 @@ type rootBackground struct {
 	bgImage    basicwidget.Image
 	background basicwidget.Background
 
-	model    *p86l.Model
 	sidebar  *Sidebar
 	bgBounds image.Rectangle
 
@@ -79,8 +78,17 @@ func (r *rootBackground) SetBgBounds(bounds image.Rectangle) {
 	r.bgBounds = bounds
 }
 
-func (r *rootBackground) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
-	am := r.model.App()
+func (r *rootBackground) AppendChildWidgets(context *guigui.Context, appender *guigui.ChildWidgetAppender) {
+	model := context.Model(r, modelKeyModel).(*p86l.Model)
+	appender.AppendChildWidget(&r.bgImage)
+	if model.Mode() != "home" {
+		appender.AppendChildWidget(&r.background)
+	}
+}
+
+func (r *rootBackground) Build(context *guigui.Context) error {
+	model := context.Model(r, modelKeyModel).(*p86l.Model)
+	am := model.App()
 
 	r.sync.Do(func() {
 		r.result = pd.Ok()
@@ -121,10 +129,9 @@ func (r *rootBackground) Build(context *guigui.Context, appender *guigui.ChildWi
 	}
 
 	imgPosition := image.Pt(00, yOffset)
-	appender.AppendChildWidgetWithPosition(&r.bgImage, imgPosition)
-
-	if r.model.Mode() != "home" {
-		appender.AppendChildWidgetWithBounds(&r.background, r.bgBounds)
+	context.SetPosition(&r.bgImage, imgPosition)
+	if model.Mode() != "home" {
+		context.SetBounds(&r.background, r.bgBounds, r)
 	}
 
 	return nil
@@ -137,12 +144,16 @@ type rootPopupContent struct {
 
 	titleText   basicwidget.Text
 	closeButton basicwidget.Button
-
-	model *p86l.Model
 }
 
-func (r *rootPopupContent) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
-	dm := r.model.App().Debug()
+func (r *rootPopupContent) AppendChildWidgets(context *guigui.Context, appender *guigui.ChildWidgetAppender) {
+	appender.AppendChildWidget(&r.titleText)
+	appender.AppendChildWidget(&r.closeButton)
+}
+
+func (r *rootPopupContent) Build(context *guigui.Context) error {
+	model := context.Model(r, modelKeyModel).(*p86l.Model)
+	dm := model.App().Debug()
 	u := basicwidget.UnitSize(context)
 
 	r.titleText.SetValue(dm.Popup().String())
@@ -167,7 +178,7 @@ func (r *rootPopupContent) Build(context *guigui.Context, appender *guigui.Child
 			}),
 		},
 	}
-	appender.AppendChildWidgetWithBounds(&r.titleText, gl.CellBounds(0, 0))
+	context.SetBounds(&r.titleText, gl.CellBounds(0, 0), r)
 	{
 		gl := layout.GridLayout{
 			Bounds: gl.CellBounds(0, 1),
@@ -176,7 +187,7 @@ func (r *rootPopupContent) Build(context *guigui.Context, appender *guigui.Child
 				layout.FixedSize(r.closeButton.DefaultSize(context).X),
 			},
 		}
-		appender.AppendChildWidgetWithBounds(&r.closeButton, gl.CellBounds(1, 0))
+		context.SetBounds(&r.closeButton, gl.CellBounds(1, 0), r)
 	}
 
 	return nil

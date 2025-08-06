@@ -32,8 +32,8 @@ import (
 
 var localeItems = []basicwidget.DropdownListItem[language.Tag]{
 	{
-		Text: "English",
-		ID:   language.English,
+		Text:  "English",
+		Value: language.English,
 	},
 }
 

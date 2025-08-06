@@ -39,16 +39,13 @@ type Play struct {
 
 	panel   basicwidget.Panel
 	content playContent
-
-	model *p86l.Model
 }
 
-func (p *Play) SetModel(model *p86l.Model) {
-	p.model = model
-	p.content.model = model
+func (p *Play) AppendChildWidgets(context *guigui.Context, appender *guigui.ChildWidgetAppender) {
+	appender.AppendChildWidget(&p.panel)
 }
 
-func (p *Play) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
+func (p *Play) Build(context *guigui.Context) error {
 	bounds := context.Bounds(p)
 	contentHeight := p.content.Height()
 
@@ -60,8 +57,7 @@ func (p *Play) Build(context *guigui.Context, appender *guigui.ChildWidgetAppend
 	}
 	context.SetSize(&p.content, contentSize, p)
 	p.panel.SetContent(&p.content)
-
-	appender.AppendChildWidgetWithBounds(&p.panel, context.Bounds(p))
+	context.SetBounds(&p.panel, context.Bounds(p), p)
 
 	return nil
 }
@@ -79,7 +75,6 @@ type playContent struct {
 	box2   basicwidget.Background
 	box3   basicwidget.Background
 	height int
-	model  *p86l.Model
 
 	prProgress bool
 	prResult   chan prereleaseResult
@@ -88,12 +83,23 @@ type playContent struct {
 	result pd.Result
 }
 
-func (p *playContent) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
-	am := p.model.App()
+func (p *playContent) AppendChildWidgets(context *guigui.Context, appender *guigui.ChildWidgetAppender) {
+	model := context.Model(p, modelKeyModel).(*p86l.Model)
+	am := model.App()
+
+	am.RenderBox(appender, &p.box1)
+	am.RenderBox(appender, &p.box2)
+	am.RenderBox(appender, &p.box3)
+	appender.AppendChildWidget(&p.buttons)
+	appender.AppendChildWidget(&p.links)
+	appender.AppendChildWidget(&p.form)
+}
+
+func (p *playContent) Build(context *guigui.Context) error {
+	model := context.Model(p, modelKeyModel).(*p86l.Model)
+	am := model.App()
 	dm := am.Debug()
-	data := p.model.Data()
-	p.buttons.model = p.model
-	p.links.model = p.model
+	data := model.Data()
 
 	p.sync.Do(func() {
 		p.result = pd.Ok()
@@ -123,7 +129,7 @@ func (p *playContent) Build(context *guigui.Context, appender *guigui.ChildWidge
 		}
 		if !p.prProgress {
 			p.prProgress = true
-			go p.handlePrerelease(value)
+			go p.handlePrerelease(model, value)
 		}
 	})
 	if data.File().UsePreRelease {
@@ -154,12 +160,12 @@ func (p *playContent) Build(context *guigui.Context, appender *guigui.ChildWidge
 		RowGap: u / 2,
 	}
 	p.height = (gl.CellBounds(0, 1).Dy() + gl.CellBounds(0, 3).Dy() + gl.CellBounds(0, 4).Dy()) + u*3
-	am.RenderBox(appender, &p.box1, gl.CellBounds(0, 1))
-	am.RenderBox(appender, &p.box2, gl.CellBounds(0, 3))
-	am.RenderBox(appender, &p.box3, gl.CellBounds(0, 4))
-	appender.AppendChildWidgetWithBounds(&p.buttons, gl.CellBounds(0, 1))
-	appender.AppendChildWidgetWithBounds(&p.links, gl.CellBounds(0, 3))
-	appender.AppendChildWidgetWithBounds(&p.form, gl.CellBounds(0, 4))
+	context.SetBounds(&p.box1, gl.CellBounds(0, 1), p)
+	context.SetBounds(&p.box2, gl.CellBounds(0, 3), p)
+	context.SetBounds(&p.box3, gl.CellBounds(0, 4), p)
+	context.SetBounds(&p.buttons, gl.CellBounds(0, 1), p)
+	context.SetBounds(&p.links, gl.CellBounds(0, 3), p)
+	context.SetBounds(&p.form, gl.CellBounds(0, 4), p)
 
 	return nil
 }
@@ -173,11 +179,10 @@ type playButtons struct {
 
 	buttons [4]basicwidget.Button
 
+	height int
+
 	progress      bool
 	progressMutex sync.Mutex
-
-	height int
-	model  *p86l.Model
 
 	gFResult   chan gameFileResult
 	lRResult   chan launcherReleaseResult
@@ -186,23 +191,30 @@ type playButtons struct {
 	sync sync.Once
 }
 
-func (p *playButtons) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
-	am := p.model.App()
+func (p *playButtons) AppendChildWidgets(context *guigui.Context, appender *guigui.ChildWidgetAppender) {
+	for i := range p.buttons {
+		appender.AppendChildWidget(&p.buttons[i])
+	}
+}
+
+func (p *playButtons) Build(context *guigui.Context) error {
+	model := context.Model(p, modelKeyModel).(*p86l.Model)
+	am := model.App()
 	dm := am.Debug()
-	data := p.model.Data()
-	cache := p.model.Cache()
+	data := model.Data()
+	cache := model.Cache()
 
 	p.sync.Do(func() {
 		p.gFResult = make(chan gameFileResult, 1)
 		p.lRResult = make(chan launcherReleaseResult, 1)
 
-		go p.fetchLauncherRelease()
+		go p.fetchLauncherRelease(model)
 	})
 
 	buttonTexts := []string{"play.install", "play.update", "play.play", "play.launcher"}
 	buttonActions := []func(){
-		func() { go p.handleGameDownload("handleInstall") },
-		func() { go p.handleGameDownload("handleUpdate") },
+		func() { go p.handleGameDownload(model, "handleInstall") },
+		func() { go p.handleGameDownload(model, "handleUpdate") },
 		func() { go p.handlePlay() },
 		func() { go p.handleLauncher() },
 	}
@@ -299,7 +311,7 @@ func (p *playButtons) Build(context *guigui.Context, appender *guigui.ChildWidge
 
 	if !p.gFProgress {
 		p.gFProgress = true
-		go p.handleGameFile()
+		go p.handleGameFile(model)
 	}
 
 	var (
@@ -385,7 +397,7 @@ func (p *playButtons) Build(context *guigui.Context, appender *guigui.ChildWidge
 
 	for i := range p.buttons {
 		bounds := gl.CellBounds(positions[i].Get())
-		appender.AppendChildWidgetWithBounds(&p.buttons[i], bounds)
+		context.SetBounds(&p.buttons[i], bounds, p)
 	}
 
 	return nil
@@ -401,11 +413,17 @@ type playLinks struct {
 	buttons [4]basicwidget.Button
 
 	height int
-	model  *p86l.Model
 }
 
-func (p *playLinks) Build(context *guigui.Context, appender *guigui.ChildWidgetAppender) error {
-	am := p.model.App()
+func (p *playLinks) AppendChildWidgets(context *guigui.Context, appender *guigui.ChildWidgetAppender) {
+	for i := range p.buttons {
+		appender.AppendChildWidget(&p.buttons[i])
+	}
+}
+
+func (p *playLinks) Build(context *guigui.Context) error {
+	model := context.Model(p, modelKeyModel).(*p86l.Model)
+	am := model.App()
 	dm := am.Debug()
 
 	buttonIcons := []string{"ie", "github", "discord", "patreon"}
@@ -513,7 +531,7 @@ func (p *playLinks) Build(context *guigui.Context, appender *guigui.ChildWidgetA
 
 	for i := range p.buttons {
 		bounds := gl.CellBounds(positions[i].Get())
-		appender.AppendChildWidgetWithBounds(&p.buttons[i], bounds)
+		context.SetBounds(&p.buttons[i], bounds, p)
 	}
 
 	return nil

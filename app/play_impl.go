@@ -45,10 +45,10 @@ type launcherReleaseResult struct {
 	release *github.RepositoryRelease
 }
 
-func (p *playContent) handlePrerelease(value bool) {
-	am := p.model.App()
+func (p *playContent) handlePrerelease(model *p86l.Model, value bool) {
+	am := model.App()
 	dm := am.Debug()
-	data := p.model.Data()
+	data := model.Data()
 
 	data.SetUsePreRelease(dm, value)
 	result := data.Save(am)
@@ -66,11 +66,11 @@ func (p *playContent) handlePrerelease(value bool) {
 	}
 }
 
-func (p *playButtons) handleGameFile() {
-	am := p.model.App()
+func (p *playButtons) handleGameFile(model *p86l.Model) {
+	am := model.App()
 	fs := am.FileSystem()
 
-	if result := fs.ExistsRoot(p.model.GameExecutablePath()); !result.Ok {
+	if result := fs.ExistsRoot(model.GameExecutablePath()); !result.Ok {
 		p.gFResult <- gameFileResult{
 			gameFile: false,
 		}
@@ -81,8 +81,8 @@ func (p *playButtons) handleGameFile() {
 	}
 }
 
-func (p *playButtons) fetchLauncherRelease() {
-	am := p.model.App()
+func (p *playButtons) fetchLauncherRelease(model *p86l.Model) {
+	am := model.App()
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
@@ -103,18 +103,18 @@ func (p *playButtons) fetchLauncherRelease() {
 
 // -- Button handlers: ran as goroutine --
 
-func (p *playButtons) handleGameDownload(InstallOrUpdate string) {
-	if !p.model.Cache().IsValid() {
+func (p *playButtons) handleGameDownload(model *p86l.Model, InstallOrUpdate string) {
+	if !model.Cache().IsValid() {
 		return
 	}
 
 	p.progress = true
 
-	am := p.model.App()
+	am := model.App()
 	dm := am.Debug()
 	log := dm.Log()
-	data := p.model.Data()
-	cache := p.model.Cache()
+	data := model.Data()
+	cache := model.Cache()
 
 	cacheAssets := cache.File().Repo.Assets
 	if data.File().UsePreRelease {
@@ -124,7 +124,7 @@ func (p *playButtons) handleGameDownload(InstallOrUpdate string) {
 	downloadAsset := func(assetName string, asset *github.ReleaseAsset) {
 		downloadUrl := asset.GetBrowserDownloadURL()
 		log.Info().Any("Asset", []string{assetName, downloadUrl}).Str("playButtons", InstallOrUpdate).Msg(pd.NetworkManager)
-		result := p86l.DownloadGame(p.model, assetName, downloadUrl, data.File().UsePreRelease)
+		result := p86l.DownloadGame(model, assetName, downloadUrl, data.File().UsePreRelease)
 		if !result.Ok {
 			dm.SetPopup(result.Err, pd.NetworkManager)
 		}
