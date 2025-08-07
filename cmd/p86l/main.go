@@ -95,7 +95,12 @@ func main() {
 		dm.Log().Error().Err(fmt.Errorf("Another instance is already running (or port %d is in use): %w", *port, err)).Msg(pd.NetworkManager)
 		os.Exit(1)
 	}
-	defer l.Close()
+	defer func() {
+		err := l.Close()
+		if err != nil {
+			dm.Log().Error().Err(fmt.Errorf("Failed to close instance: %w", err)).Msg(pd.ErrorManager)
+		}
+	}()
 
 	op := &guigui.RunOptions{
 		Title:         configs.AppTitle,

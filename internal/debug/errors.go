@@ -112,4 +112,6 @@ const (
 	ErrNetworkDownloadRequest
 	ErrNetworkPrereleaseRequest
 	ErrNetworkStatusNotOk
+
+	ErrNetworkBodyClose
 )

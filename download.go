@@ -97,7 +97,11 @@ func DownloadFile(model *Model, filename, src, dest string) pd.Result {
 		if err != nil {
 			return pd.NotOk(pd.New(err, pd.NetworkError, pd.ErrNetworkDownloadRequest))
 		}
-		resp.Body.Close()
+		defer func() {
+			if err := resp.Body.Close(); err != nil {
+				dm.SetToast(pd.New(err, pd.NetworkError, pd.ErrNetworkBodyClose), pd.NetworkManager)
+			}
+		}()
 
 		if resp.StatusCode != http.StatusOK {
 			return pd.NotOk(pd.New(fmt.Errorf("bad HEAD status: %s", resp.Status), pd.NetworkError, pd.ErrNetworkStatusNotOk))
@@ -130,8 +134,8 @@ func DownloadFile(model *Model, filename, src, dest string) pd.Result {
 		return pd.NotOk(pd.New(err, pd.FSError, pd.ErrFSRootFileNew))
 	}
 	defer func() {
-		if cerr := out.Close(); cerr != nil {
-			dm.SetToast(pd.New(cerr, pd.FSError, pd.ErrFSRootFileClose), pd.FileManager)
+		if err := out.Close(); err != nil {
+			dm.SetToast(pd.New(err, pd.FSError, pd.ErrFSRootFileClose), pd.FileManager)
 		}
 	}()
 
@@ -151,8 +155,8 @@ func DownloadFile(model *Model, filename, src, dest string) pd.Result {
 		return pd.NotOk(pd.New(err, pd.NetworkError, pd.ErrNetworkDownloadRequest))
 	}
 	defer func() {
-		if cerr := resp.Body.Close(); cerr != nil {
-			dm.SetToast(pd.New(cerr, pd.FSError, pd.ErrFSRootFileClose), pd.FileManager)
+		if err := resp.Body.Close(); err != nil {
+			dm.SetToast(pd.New(err, pd.FSError, pd.ErrFSRootFileClose), pd.FileManager)
 		}
 	}()
 
@@ -210,8 +214,8 @@ func unzipToDir(model *Model, src, dest string) pd.Result {
 		return pd.NotOk(pd.New(err, pd.FSError, pd.ErrFSRootFileRead))
 	}
 	defer func() {
-		if cerr := r.Close(); cerr != nil {
-			dm.SetToast(pd.New(cerr, pd.FSError, pd.ErrFSRootFileClose), pd.FileManager)
+		if err := r.Close(); err != nil {
+			dm.SetToast(pd.New(err, pd.FSError, pd.ErrFSRootFileClose), pd.FileManager)
 		}
 	}()
 
@@ -237,8 +241,8 @@ func extractFile(f *zip.File, dest string, dm *pd.Debug) pd.Result {
 		return pd.NotOk(pd.New(err, pd.FSError, pd.ErrFSFileInvalid))
 	}
 	defer func() {
-		if cerr := rc.Close(); cerr != nil {
-			dm.SetToast(pd.New(cerr, pd.FSError, pd.ErrFSRootFileClose), pd.FileManager)
+		if err := rc.Close(); err != nil {
+			dm.SetToast(pd.New(err, pd.FSError, pd.ErrFSRootFileClose), pd.FileManager)
 		}
 	}()
 
@@ -256,8 +260,8 @@ func extractFile(f *zip.File, dest string, dm *pd.Debug) pd.Result {
 		return pd.NotOk(pd.New(err, pd.FSError, pd.ErrFSFileInvalid))
 	}
 	defer func() {
-		if cerr := out.Close(); cerr != nil {
-			dm.SetToast(pd.New(cerr, pd.FSError, pd.ErrFSRootFileClose), pd.FileManager)
+		if err := out.Close(); err != nil {
+			dm.SetToast(pd.New(err, pd.FSError, pd.ErrFSRootFileClose), pd.FileManager)
 		}
 	}()
 
