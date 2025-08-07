@@ -24,6 +24,9 @@
 package main
 
 import (
+	"flag"
+	"fmt"
+	"net"
 	"os"
 	"p86l/app"
 	"p86l/configs"
@@ -39,6 +42,9 @@ import (
 var version = "dev"
 
 func main() {
+	port := flag.Int("instance", 54321, "Prot to use for single-instance locking")
+	flag.Parse()
+
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
 	zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
 
@@ -84,6 +90,13 @@ func main() {
 		result.Err.LogErrStack(am.Debug().Log(), "main", "NewRoot", pd.FileManager)
 		os.Exit(1)
 	}
+	l, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", *port))
+	if err != nil {
+		dm.Log().Error().Err(fmt.Errorf("Another instance is already running (or port %d is in use): %w", *port, err)).Msg(pd.NetworkManager)
+		os.Exit(1)
+	}
+	defer l.Close()
+
 	op := &guigui.RunOptions{
 		Title:         configs.AppTitle,
 		WindowMinSize: configs.AppWindowMinSize,
