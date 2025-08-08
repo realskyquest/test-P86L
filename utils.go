@@ -183,7 +183,7 @@ func LoadData(am *AppModel) (pd.Result, *file.Data) {
 	dm := am.Debug()
 	fs := am.FileSystem()
 
-	result, b := fs.Load(fs.PathFileData())
+	result, b := fs.Load(dm, fs.PathFileData())
 	if !result.Ok {
 		return result, nil
 	}
@@ -199,7 +199,7 @@ func LoadCache(am *AppModel) (pd.Result, *file.Cache) {
 	dm := am.Debug()
 	fs := am.FileSystem()
 
-	result, b := fs.Load(fs.PathFileCache())
+	result, b := fs.Load(dm, fs.PathFileCache())
 	if !result.Ok {
 		return result, nil
 	}
@@ -219,7 +219,7 @@ func SaveData(am *AppModel, d file.Data) pd.Result {
 	if !result.Ok {
 		return result
 	}
-	result = fs.Save(fs.PathFileData(), b)
+	result = fs.Save(dm, fs.PathFileData(), b)
 	if !result.Ok {
 		return result
 	}
@@ -237,7 +237,7 @@ func SaveCache(am *AppModel, c file.Cache) pd.Result {
 	if !result.Ok {
 		return result
 	}
-	result = fs.Save(fs.PathFileCache(), b)
+	result = fs.Save(dm, fs.PathFileCache(), b)
 	if !result.Ok {
 		return result
 	}

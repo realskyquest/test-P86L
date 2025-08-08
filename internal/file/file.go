@@ -111,7 +111,7 @@ func (a *AppFS) PathLauncher(components ...string) string {
 // TODO: List?
 
 // Load returns bytes from a file.
-func (a *AppFS) Load(loadFile string) (pd.Result, []byte) {
+func (a *AppFS) Load(dm *pd.Debug, loadFile string) (pd.Result, []byte) {
 	if result := a.ExistsRoot(loadFile); !result.Ok {
 		return result, nil
 	}
@@ -120,8 +120,11 @@ func (a *AppFS) Load(loadFile string) (pd.Result, []byte) {
 	if err != nil {
 		return pd.NotOk(pd.New(err, pd.FSError, pd.ErrFSRootFileInvalid)), nil
 	}
-	defer file.Close()
-
+	defer func() {
+		if err := file.Close(); err != nil {
+			dm.SetToast(pd.New(err, pd.FSError, pd.ErrFSRootFileClose), pd.FileManager)
+		}
+	}()
 	b, err := io.ReadAll(file)
 	if err != nil {
 		return pd.NotOk(pd.New(err, pd.FSError, pd.ErrFSRootFileRead)), nil
@@ -161,12 +164,16 @@ func (a *AppFS) ExistsLauncher(components ...string) pd.Result {
 }
 
 // Save writes a file.
-func (a *AppFS) Save(saveFile string, bytes []byte) pd.Result {
+func (a *AppFS) Save(dm *pd.Debug, saveFile string, bytes []byte) pd.Result {
 	file, err := a.Root.Create(saveFile)
 	if err != nil {
 		return pd.NotOk(pd.New(err, pd.FSError, pd.ErrFSRootFileNew))
 	}
-
+	defer func() {
+		if err := file.Close(); err != nil {
+			dm.SetToast(pd.New(err, pd.FSError, pd.ErrFSRootFileClose), pd.FileManager)
+		}
+	}()
 	_, err = file.Write(bytes)
 	if err != nil {
 		return pd.NotOk(pd.New(err, pd.FSError, pd.ErrFSRootFileWrite))
