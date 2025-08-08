@@ -57,7 +57,7 @@ func TestSaveFiles(t *testing.T) {
 	if !result.Ok {
 		t.Fatalf("%s", result.Err.String())
 	}
-	result = fs.Save(fs.PathFileData(), b)
+	result = fs.Save(e, fs.PathFileData(), b)
 	if !result.Ok {
 		t.Fatalf("%s", result.Err.String())
 	}
@@ -66,7 +66,7 @@ func TestSaveFiles(t *testing.T) {
 func TestLoadFiles(t *testing.T) {
 	e, fs := setup(t)
 
-	result, b := fs.Load(fs.PathFileData())
+	result, b := fs.Load(e, fs.PathFileData())
 	if !result.Ok {
 		t.Fatalf("%s", result.Err.String())
 	}
