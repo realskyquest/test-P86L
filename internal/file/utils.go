@@ -12,6 +12,11 @@ func (a *AppFS) PathDirApp() string {
 	return configs.AppName
 }
 
+// /Project-86-Launcher/logs/
+func (a *AppFS) PathDirLogs() string {
+	return filepath.Join(a.PathDirApp(), "logs")
+}
+
 // /build/
 func (a *AppFS) PathDirBuild() string {
 	return "build"
@@ -37,11 +42,6 @@ func (a *AppFS) PathFileGame() string {
 // build/game/Project-86.exe
 func (a *AppFS) PathFilePrerelease() string {
 	return filepath.Join(a.PathDirPrerelease(), "Project-86.exe")
-}
-
-// /Project-86-Launcher/log.txt
-func (a *AppFS) PathFileLog() string {
-	return filepath.Join(a.PathDirApp(), "log.txt")
 }
 
 // /Project-86-Launcher/data.json

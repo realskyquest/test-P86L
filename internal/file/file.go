@@ -75,6 +75,12 @@ func NewFS(extra ...string) (pd.Result, *AppFS) {
 		return result, nil
 	}
 
+	// Make a folder for logs.
+	result = mkdirAll(filepath.Join(companyPath, configs.AppName, "logs"))
+	if !result.Ok {
+		return result, nil
+	}
+
 	// Creates a virtual filesystem thats in company path, that protects/restricts changes outside of it.
 	root, err := os.OpenRoot(companyPath)
 	if err != nil {

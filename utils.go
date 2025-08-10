@@ -28,7 +28,10 @@ import (
 	"p86l/configs"
 	pd "p86l/internal/debug"
 	"p86l/internal/file"
+	"path/filepath"
 	"runtime"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -38,6 +41,82 @@ import (
 	"github.com/pkg/browser"
 	"golang.org/x/text/language"
 )
+
+type logFileInfo struct {
+	name      string
+	timestamp int64
+	modTime   time.Time
+}
+
+func NewLogFile(root *os.Root, path string) (*os.File, error) {
+	timestamp := time.Now().UTC().Unix()
+	filename := fmt.Sprintf("log-%d.txt", timestamp)
+
+	file, err := root.Create(filepath.Join(path, filename))
+	if err != nil {
+		return nil, fmt.Errorf("Failed to create log file: %w", err)
+	}
+
+	return file, nil
+}
+
+func RotateLogFiles(root *os.Root, pathDirCompany, pathDirLogs string) error {
+	logDir := filepath.Join(pathDirCompany, pathDirLogs)
+
+	entries, err := os.ReadDir(logDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("Failed to read log directory: %w", err)
+	}
+
+	var logFiles []logFileInfo
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasPrefix(entry.Name(), "log-") && strings.HasSuffix(entry.Name(), ".txt") {
+			tsStr := strings.TrimPrefix(entry.Name(), "log-")
+			tsStr = strings.TrimSuffix(tsStr, ".txt")
+
+			ts, err := strconv.ParseInt(tsStr, 10, 64)
+			if err != nil {
+				continue // Skip files with invalid timestamps.
+			}
+
+			info, err := entry.Info()
+			if err != nil {
+				continue // Skip files we can't get info for.
+			}
+
+			logFiles = append(logFiles, logFileInfo{
+				name:      entry.Name(),
+				timestamp: ts,
+				modTime:   info.ModTime(),
+			})
+		}
+	}
+
+	maxKeep := 10
+
+	// If we have less than 10 files, no need to rotate.
+	if len(logFiles) <= maxKeep {
+		return nil
+	}
+
+	sort.Slice(logFiles, func(i, j int) bool {
+		return logFiles[i].timestamp < logFiles[j].timestamp
+	})
+
+	filesToDelete := len(logFiles) - maxKeep
+	for i := 0; i < filesToDelete; i++ {
+		filePath := filepath.Join(logDir, logFiles[i].name)
+		err := os.Remove(filePath)
+		if err != nil {
+			return fmt.Errorf("Failed to delete old log file %s: %w", filePath, err)
+		}
+	}
+
+	return nil
+}
 
 func LoadB(am *AppModel, context *guigui.Context, model *Model, loadType string) pd.Result {
 	dm := am.Debug()

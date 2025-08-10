@@ -28,10 +28,10 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"p86l"
 	"p86l/app"
 	"p86l/configs"
 	pd "p86l/internal/debug"
-	"path/filepath"
 	"strings"
 
 	"github.com/hajimehoshi/guigui"
@@ -42,23 +42,32 @@ import (
 var version = "dev"
 
 func main() {
-	port := flag.Int("instance", 54321, "Prot to use for single-instance locking")
+	port := flag.Int("instance", 54321, "Port to use for single-instance locking")
 	flag.Parse()
 
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
 	zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
 
 	result, newRoot, model := app.NewRoot(version)
+	if !result.Ok {
+		fmt.Println("P86L - app.NewRoot - %w", result.Err)
+		os.Exit(1)
+	}
 	am := model.App()
 	dm := am.Debug()
 	fs := am.FileSystem()
+	defer func() {
+		if err := fs.Root.Close(); err != nil {
+			fmt.Println("Failed to close root: %w", err)
+		}
+	}()
 
 	if version == "dev" {
-		newLog := zerolog.New(os.Stdout).With().Timestamp().Logger()
-		newLog = newLog.Output(zerolog.ConsoleWriter{
+		output := zerolog.ConsoleWriter{
 			Out:        os.Stderr,
 			TimeFormat: "2006/01/02 15:04:05",
-		})
+		}
+		newLog := zerolog.New(output).With().Timestamp().Logger()
 		dm.SetLog(&newLog)
 
 		for _, token := range strings.Split(os.Getenv("P86L_DEBUG"), ",") {
@@ -70,11 +79,21 @@ func main() {
 			}
 		}
 	} else {
-		logFile, rErr := fs.Root.Create(filepath.Join(fs.PathDirApp(), "log.txt"))
-		if rErr != nil {
-			am.Debug().Log().Error().Err(rErr).Msg("Failed to create log file")
+		if err := p86l.RotateLogFiles(fs.Root, fs.CompanyDirPath, fs.PathDirLogs()); err != nil {
+			fmt.Println("Log rotation warning: %w", err)
 			os.Exit(1)
 		}
+
+		logFile, err := p86l.NewLogFile(fs.Root, fs.PathDirLogs())
+		if err != nil {
+			fmt.Println("Failed to create new log file: %w", err)
+			os.Exit(1)
+		}
+		defer func() {
+			if err := logFile.Close(); err != nil {
+				fmt.Println("Failed to close log file: %w", err)
+			}
+		}()
 
 		multi := zerolog.MultiLevelWriter(os.Stdout, logFile)
 		newLog := zerolog.New(multi).With().Timestamp().Logger()
@@ -82,13 +101,9 @@ func main() {
 		am.SetLogsEnabled(true)
 	}
 
+	// After this use zerolog, its now available.
 	if !am.LogsEnabled() {
 		zerolog.SetGlobalLevel(zerolog.Disabled)
-	}
-
-	if !result.Ok {
-		result.Err.LogErrStack(am.Debug().Log(), "main", "NewRoot", pd.FileManager)
-		os.Exit(1)
 	}
 	l, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", *port))
 	if err != nil {
@@ -96,8 +111,7 @@ func main() {
 		os.Exit(1)
 	}
 	defer func() {
-		err := l.Close()
-		if err != nil {
+		if err := l.Close(); err != nil {
 			dm.Log().Error().Err(fmt.Errorf("Failed to close instance: %w", err)).Msg(pd.ErrorManager)
 		}
 	}()
