@@ -313,7 +313,7 @@ func (r *Root) Tick(context *guigui.Context) error {
 			go r.fetchRatelimit()
 		}
 
-		if !cache.Progress() && !cache.IsValid() || time.Now().After(cache.File().Timestamp.Add(cache.File().ExpiresIn)) {
+		if !cache.Progress() && !cache.IsValid() || !cache.IsTimestampValid() {
 			cache.SetProgress(true)
 			log.Info().Str("Cache", "cache refresh triggered").Msg(pd.NetworkManager)
 			go r.fetchLatestCache()

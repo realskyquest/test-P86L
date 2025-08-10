@@ -52,6 +52,10 @@ func (c *CacheModel) Changelog() string {
 	return c.changelog
 }
 
+func (c *CacheModel) IsTimestampValid() bool {
+	return time.Now().Before(c.File().Timestamp.Add(c.File().ExpiresIn))
+}
+
 // -- Setters for CacheModel --
 
 func (c *CacheModel) SetProgress(value bool) {
