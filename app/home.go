@@ -200,9 +200,9 @@ func (h *homeContent) Build(context *guigui.Context) error {
 		Bounds: context.Bounds(h),
 		Widths: []layout.Size{
 			layout.FixedSize(u*3 - (u / 2)),
-			layout.FlexibleSize(1),
-			layout.FlexibleSize(1),
-			layout.FlexibleSize(1),
+			layout.FlexibleSize(2),
+			layout.FlexibleSize(2),
+			layout.FlexibleSize(3),
 		},
 		Heights: []layout.Size{
 			layout.FlexibleSize(1),
