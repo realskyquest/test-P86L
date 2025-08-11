@@ -22,6 +22,7 @@
 package app
 
 import (
+	"fmt"
 	"p86l"
 	"p86l/assets"
 	pd "p86l/internal/debug"
@@ -148,7 +149,7 @@ func (h *homeContent) Build(context *guigui.Context) error {
 	})
 
 	h.playTimeText.SetValue(am.T("home.playtime"))
-	h.playCountText.SetValue(string(data.File().PlayTime))
+	h.playCountText.SetValue(fmt.Sprintf("%d", data.File().PlayTime))
 	h.lastPlayedText.SetValue(am.T("home.lastplayed"))
 	if data.File().PlayTime == 0 {
 		h.lastTimeText.SetValue("")

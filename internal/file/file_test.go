@@ -35,7 +35,6 @@ func setup(t *testing.T) (*pd.Debug, *file.AppFS) {
 	if !result.Ok {
 		t.Fatalf("%s", result.Err.String())
 	}
-
 	return e, a
 }
 
@@ -46,6 +45,12 @@ func TestInit(t *testing.T) {
 
 func TestSaveFiles(t *testing.T) {
 	e, fs := setup(t)
+	defer func() {
+		err := fs.Root.Close()
+		if err != nil {
+			t.Fatalf("Failed to close root: %v", err)
+		}
+	}()
 
 	exampleData := file.Data{
 		Locale:    "fr",
@@ -65,6 +70,12 @@ func TestSaveFiles(t *testing.T) {
 
 func TestLoadFiles(t *testing.T) {
 	e, fs := setup(t)
+	defer func() {
+		err := fs.Root.Close()
+		if err != nil {
+			t.Fatalf("Failed to close root: %v", err)
+		}
+	}()
 
 	result, b := fs.Load(e, fs.PathFileData())
 	if !result.Ok {
@@ -80,6 +91,12 @@ func TestLoadFiles(t *testing.T) {
 
 func TestStatFile(t *testing.T) {
 	_, fs := setup(t)
+	defer func() {
+		err := fs.Root.Close()
+		if err != nil {
+			t.Fatalf("Failed to close root: %v", err)
+		}
+	}()
 
 	if result := fs.ExistsRoot(fs.PathFileData()); !result.Ok {
 		t.Fatalf("%s", result.Err.String())
