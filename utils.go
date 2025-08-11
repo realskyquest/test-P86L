@@ -107,7 +107,7 @@ func RotateLogFiles(root *os.Root, pathDirCompany, pathDirLogs string) error {
 	})
 
 	filesToDelete := len(logFiles) - maxKeep
-	for i := 0; i < filesToDelete; i++ {
+	for i := range filesToDelete {
 		filePath := filepath.Join(pathDirLogs, logFiles[i].name)
 		err := root.Remove(filePath)
 		if err != nil {
