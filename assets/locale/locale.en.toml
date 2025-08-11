@@ -4,9 +4,11 @@ open = "Open"
 [home]
 title = "Home"
 welcome = "Welcome back,"
-downloads = "Downloads:"
-version = "Latest version:"
 downloaded = "Downloaded:"
+playtime = "Play time:"
+lastplayed = "Last played:"
+version = "Latest version:"
+downloads = "Downloads:"
 
 [play]
 title = "Play"
@@ -15,10 +17,6 @@ prerelease = "Install Pre-release"
 update = "Update"
 launcher = "Update Launcher"
 play = "Play"
-website = "Website - Offical website!"
-github = "Github - Help develop the game?"
-discord = "Discord - Meet the community!"
-patreon = "Patreon - Donate to the devs?"
 
 [changelog]
 title = "Changelog"

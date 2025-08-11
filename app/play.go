@@ -252,7 +252,7 @@ func (p *playButtons) Build(context *guigui.Context) error {
 						if !cache.IsValid() {
 							context.SetEnabled(&p.buttons[i], false)
 						} else {
-							if data.File().GameVersion == "" && !cache.IsValid() {
+							if data.File().GameVersion == "" {
 								context.SetEnabled(&p.buttons[i], false)
 							} else {
 								if result, uValue := p86l.CheckNewerVersion(data.File().GameVersion, cache.File().Repo.GetTagName()); !result.Ok {
@@ -352,8 +352,8 @@ func (p *playButtons) Build(context *guigui.Context) error {
 			layout.FlexibleSize(1),
 		}
 		heights = []layout.Size{
-			layout.FixedSize(int(float64(u) * 1.5)),
-			layout.FixedSize(int(float64(u) * 1.5)),
+			layout.FixedSize(u * 2),
+			layout.FixedSize(u * 2),
 		}
 		positions = [4]breakWidget{
 			{1, 0},
@@ -427,7 +427,6 @@ func (p *playLinks) Build(context *guigui.Context) error {
 	dm := am.Debug()
 
 	buttonIcons := []string{"ie", "github", "discord", "patreon"}
-	buttonTexts := []string{"play.website", "play.github", "play.discord", "play.patreon"}
 	buttonActions := []func(){
 		func() { go p86l.OpenBrowser(dm, configs.Website) },
 		func() { go p86l.OpenBrowser(dm, configs.Github) },
@@ -443,94 +442,31 @@ func (p *playLinks) Build(context *guigui.Context) error {
 		}
 
 		p.buttons[i].SetIcon(img)
-		p.buttons[i].SetText(am.T(buttonTexts[i]))
 		p.buttons[i].SetOnDown(buttonActions[i])
 	}
 
-	var (
-		u         = basicwidget.UnitSize(context)
-		widths    []layout.Size
-		heights   []layout.Size
-		positions [4]breakWidget
-	)
-
-	switch {
-	case breakSize(context, 1024):
-		widths = []layout.Size{
-			layout.FlexibleSize(1),
-			layout.FlexibleSize(1),
-			layout.FlexibleSize(1),
-			layout.FlexibleSize(1),
-		}
-		heights = []layout.Size{
-			layout.FixedSize(u * 2),
-		}
-		positions = [4]breakWidget{
-			{0, 0},
-			{1, 0},
-			{2, 0},
-			{3, 0},
-		}
-	case breakSize(context, 640):
-		widths = []layout.Size{
-			layout.FlexibleSize(1),
-			layout.FixedSize(u / 2),
-			layout.FlexibleSize(1),
-		}
-		heights = []layout.Size{
-			layout.FixedSize(u * 2),
-			layout.FixedSize(u * 2),
-		}
-		positions = [4]breakWidget{
-			{0, 0},
-			{0, 1},
-			{2, 0},
-			{2, 1},
-		}
-	default:
-		widths = []layout.Size{
-			layout.FlexibleSize(1),
-		}
-		heights = []layout.Size{
-			layout.FixedSize(int(float64(u) * 1.5)),
-			layout.FixedSize(int(float64(u) * 1.5)),
-			layout.FixedSize(int(float64(u) * 1.5)),
-			layout.FixedSize(int(float64(u) * 1.5)),
-		}
-		positions = [4]breakWidget{
-			{0, 0},
-			{0, 1},
-			{0, 2},
-			{0, 3},
-		}
-	}
-
-	doColumn := func() int {
-		if breakSize(context, 1024) {
-			return u / 2
-		}
-		return 0
-	}
-
+	u := basicwidget.UnitSize(context)
 	gl := layout.GridLayout{
-		Bounds:    context.Bounds(p),
-		Widths:    widths,
-		Heights:   heights,
-		ColumnGap: doColumn(),
-		RowGap:    u / 2,
+		Bounds: context.Bounds(p),
+		Widths: []layout.Size{
+			layout.FixedSize(u * 2),
+			layout.FixedSize(u * 2),
+			layout.FixedSize(u * 2),
+			layout.FixedSize(u * 2),
+			layout.FlexibleSize(1),
+		},
+		Heights: []layout.Size{
+			layout.FixedSize(u * 2),
+			layout.FixedSize(u * 2),
+			layout.FixedSize(u * 2),
+			layout.FixedSize(u * 2),
+		},
+		ColumnGap: u / 2,
 	}
 
-	switch {
-	case breakSize(context, 1024):
-		p.height = gl.CellBounds(positions[0].Get()).Dy()
-	case breakSize(context, 640):
-		p.height = gl.CellBounds(positions[0].Get()).Dy()*2 + u/2
-	default:
-		p.height = gl.CellBounds(positions[0].Get()).Dy()*4 + int(float64(u)*1.5)
-	}
-
+	p.height = u * 2
 	for i := range p.buttons {
-		bounds := gl.CellBounds(positions[i].Get())
+		bounds := gl.CellBounds(i, 0)
 		context.SetBounds(&p.buttons[i], bounds, p)
 	}
 

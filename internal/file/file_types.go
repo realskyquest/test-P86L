@@ -41,6 +41,8 @@ type Data struct {
 	AppScale       int              `json:"app_scale"`
 	ColorMode      guigui.ColorMode `json:"color_mode"`
 	UsePreRelease  bool             `json:"use_pre_release"`
+	PlayTime       int              `json:"play_time"`
+	LastPlayed     time.Time        `json:"last_played"`
 	GameVersion    string           `json:"game_version"`
 }
 
@@ -54,6 +56,7 @@ func (d *Data) Log(dm *pd.Debug) {
 		return
 	}
 	log.Info().Any("Use Pre-release", d.UsePreRelease).Msg("FileManager")
+	log.Info().Any("Play Time", d.PlayTime).Msg("FileManager")
 	log.Info().Any("Game Version", d.GameVersion).Msg("FileManager")
 }
 

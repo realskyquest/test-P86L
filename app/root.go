@@ -176,7 +176,6 @@ func (r *Root) Build(context *guigui.Context) error {
 		log.Info().Str("Version", am.PlainVersion()).Msg("P86L - Project 86 Launcher")
 		log.Info().Str("Detected OS", runtime.GOOS).Msg("Operating System")
 		log.Info().Str("Graphics API", gpuInfo.GraphicsLibrary.String()).Msg("GPU")
-		log.Warn().Str("LICENSE", am.License()).Msg("README")
 
 		cache.SetChangelog(am, data.File().Locale)
 

@@ -25,6 +25,7 @@ import (
 	"p86l"
 	"p86l/assets"
 	pd "p86l/internal/debug"
+	"time"
 
 	"github.com/dustin/go-humanize"
 	"github.com/hajimehoshi/guigui"
@@ -78,7 +79,13 @@ type homeContent struct {
 	downloadedText  basicwidget.Text
 	gameVersionText basicwidget.Text
 
-	form2         basicwidget.Form
+	form2          basicwidget.Form
+	playTimeText   basicwidget.Text
+	playCountText  basicwidget.Text
+	lastPlayedText basicwidget.Text
+	lastTimeText   basicwidget.Text
+
+	form3         basicwidget.Form
 	downloadsText basicwidget.Text
 	countText     basicwidget.Text
 	versionText   basicwidget.Text
@@ -99,6 +106,7 @@ func (h *homeContent) AppendChildWidgets(context *guigui.Context, appender *guig
 	appender.AppendChildWidget(&h.p86lImage)
 	appender.AppendChildWidget(&h.form1)
 	appender.AppendChildWidget(&h.form2)
+	appender.AppendChildWidget(&h.form3)
 }
 
 func (h *homeContent) Build(context *guigui.Context) error {
@@ -139,6 +147,26 @@ func (h *homeContent) Build(context *guigui.Context) error {
 		},
 	})
 
+	h.playTimeText.SetValue(am.T("home.playtime"))
+	h.playCountText.SetValue(string(data.File().PlayTime))
+	h.lastPlayedText.SetValue(am.T("home.lastplayed"))
+	if data.File().PlayTime == 0 {
+		h.lastTimeText.SetValue("")
+	} else {
+		h.lastTimeText.SetValue(humanize.RelTime(time.Now(), data.File().LastPlayed, "before", "ago"))
+	}
+
+	h.form2.SetItems([]basicwidget.FormItem{
+		{
+			PrimaryWidget:   &h.playTimeText,
+			SecondaryWidget: &h.playCountText,
+		},
+		{
+			PrimaryWidget:   &h.lastPlayedText,
+			SecondaryWidget: &h.lastTimeText,
+		},
+	})
+
 	h.downloadsText.SetValue(am.T("home.downloads"))
 	h.versionText.SetValue(am.T("home.version"))
 
@@ -155,7 +183,7 @@ func (h *homeContent) Build(context *guigui.Context) error {
 		h.latestText.SetValue("...")
 	}
 
-	h.form2.SetItems([]basicwidget.FormItem{
+	h.form3.SetItems([]basicwidget.FormItem{
 		{
 			PrimaryWidget:   &h.downloadsText,
 			SecondaryWidget: &h.countText,
@@ -173,6 +201,7 @@ func (h *homeContent) Build(context *guigui.Context) error {
 			layout.FixedSize(u*3 - (u / 2)),
 			layout.FlexibleSize(1),
 			layout.FlexibleSize(1),
+			layout.FlexibleSize(1),
 		},
 		Heights: []layout.Size{
 			layout.FlexibleSize(1),
@@ -180,11 +209,12 @@ func (h *homeContent) Build(context *guigui.Context) error {
 	}
 	context.SetBounds(&h.box1, gl.CellBounds(1, 0).Inset(u/2), h)
 	context.SetBounds(&h.box2, gl.CellBounds(2, 0).Inset(u/2), h)
-	h.height = max(h.form1.DefaultSizeInContainer(context, context.Bounds(h).Dx()-u).Y, h.form2.DefaultSizeInContainer(context, context.Bounds(h).Dx()).Y)
+	h.height = max(h.form1.DefaultSizeInContainer(context, context.Bounds(h).Dx()-u).Y, h.form2.DefaultSizeInContainer(context, context.Bounds(h).Dx()).Y, h.form3.DefaultSizeInContainer(context, context.Bounds(h).Dx()).Y)
 	context.SetBounds(&h.background, context.Bounds(h), h)
 	context.SetBounds(&h.p86lImage, gl.CellBounds(0, 0), h)
 	context.SetBounds(&h.form1, gl.CellBounds(1, 0).Inset(u/2), h)
 	context.SetBounds(&h.form2, gl.CellBounds(2, 0).Inset(u/2), h)
+	context.SetBounds(&h.form3, gl.CellBounds(3, 0).Inset(u/2), h)
 
 	return nil
 }

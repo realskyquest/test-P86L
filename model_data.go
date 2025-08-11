@@ -24,6 +24,7 @@ package p86l
 import (
 	pd "p86l/internal/debug"
 	"p86l/internal/file"
+	"time"
 
 	"github.com/hajimehoshi/guigui"
 	"github.com/hashicorp/go-version"
@@ -46,8 +47,10 @@ func NewData() file.Data {
 		Locale:         language.English.String(),
 		AppScale:       2,
 		ColorMode:      guigui.ColorModeLight,
-		GameVersion:    "",
 		UsePreRelease:  false,
+		PlayTime:       0,
+		LastPlayed:     time.Now(),
+		GameVersion:    "",
 	}
 }
 
@@ -127,6 +130,13 @@ func (d *DataModel) SetColorMode(dm *pd.Debug, context *guigui.Context, mode gui
 func (d *DataModel) SetUsePreRelease(dm *pd.Debug, value bool) {
 	dm.Log().Info().Any("Pre-release", value).Str("DateModel", "SetUsePreRelease").Msg(pd.FileManager)
 	d.file.UsePreRelease = value
+}
+
+func (d *DataModel) SetPlayTime(dm *pd.Debug, value int, timestamp time.Time) {
+	dm.Log().Info().Int("PlayTime", value).Str("DataModel", "SetPlayTime").Msg(pd.FileManager)
+	dm.Log().Info().Str("LastPlayed", timestamp.String()).Str("DataModel", "SetPlayTime").Msg(pd.FileManager)
+	d.file.PlayTime = value
+	d.file.LastPlayed = timestamp
 }
 
 func (d *DataModel) SetGameVersion(dm *pd.Debug, ver string) pd.Result {
