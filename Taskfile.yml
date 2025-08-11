@@ -77,15 +77,9 @@ tasks:
 
   build:windows:
     cmds:
-      - GOOS=windows GOARCH=amd64 go build -ldflags "-s -w -X main.version={{.VERSION}} -X=runtime.godebugDefault=asyncpreemptoff=1 -H=windowsgui" -trimpath -o bin/Project-86-Launcher-{{.VERSION}}.exe ./cmd/p86l
+      - GOOS=windows GOARCH=amd64 go build -ldflags "-s -w -X main.version={{.VERSION}} -X=runtime.godebugDefault=asyncpreemptoff=1 -H=windowsgui" -trimpath -o bin/Project-86-Launcher.exe ./cmd/p86l
     generates:
-      - bin/Project-86-Launcher-{{.VERSION}}.exe
-
-  build:windows-cjk:
-    cmds:
-      - GOOS=windows GOARCH=amd64 go build -tags 'cjk' -ldflags "-s -w -X main.version={{.VERSION}} -X=runtime.godebugDefault=asyncpreemptoff=1 -H=windowsgui" -trimpath -o bin/Project-86-Launcher-cjk-{{.VERSION}}.exe ./cmd/p86l
-    generates:
-      - bin/Project-86-Launcher-cjk-{{.VERSION}}.exe
+      - bin/Project-86-Launcher.exe
 
   zip:
     desc: Create ZIP archives for Windows executables
@@ -93,21 +87,17 @@ tasks:
     dir: bin
     cmds:
       - |
-        for exe in *.exe; do
-          APP_DIR="Project-86-Launcher-{{.VERSION}}/Project-86-Launcher"
-          mkdir -p "$APP_DIR"
+        APP_DIR="Project-86-Launcher-{{.VERSION}}/Project-86-Launcher"
+        mkdir -p "$APP_DIR"
 
-          cp "$exe" "$APP_DIR/"
-          cp run.bat "$APP_DIR/"
-          cp p86l.ico "$APP_DIR/"
-          cp p86l.png "$APP_DIR/"
+        cp Project-86-Launcher.exe "$APP_DIR/"
+        cp p86l.ico "$APP_DIR/"
+        cp p86l.png "$APP_DIR/"
 
-          zip -r "${exe%.exe}.zip" "$APP_DIR"
-          rm -rf "Project-86-Launcher-{{.VERSION}}"
-        done
+        zip -r "Project-86-Launcher-{{.VERSION}}.zip" "Project-86-Launcher-{{.VERSION}}"
+        rm -rf "Project-86-Launcher-{{.VERSION}}"
     sources:
-      - "Project-86-Launcher-{{.VERSION}}.exe"
-      - "run.bat"
+      - "Project-86-Launcher.exe"
       - "p86l.ico"
       - "p86l.png"
     generates:
@@ -116,19 +106,15 @@ tasks:
   zip:assets:
     desc: Copy assets needed for zip to bin directory
     cmds:
-      - cp assets/run.bat bin/
       - cp assets/p86l.ico bin/
       - cp assets/p86l.png bin/
     sources:
-      - assets/run.bat
       - assets/p86l.ico
       - assets/p86l.png
     generates:
-      - bin/run.bat
       - bin/p86l.ico
       - bin/p86l.png
     status:
-      - test -f bin/run.bat
       - test -f bin/p86l.ico
       - test -f bin/p86l.png
 
@@ -136,11 +122,10 @@ tasks:
     desc: Generate SHA256 checksums for release files
     dir: bin
     cmds:
-      - sha256sum Project-86-Launcher-{{.VERSION}}.zip Project-86-Launcher-{{.VERSION}}.exe run.bat p86l.ico p86l.png > sha256sum.txt
+      - sha256sum Project-86-Launcher-{{.VERSION}}.zip Project-86-Launcher.exe p86l.ico p86l.png > sha256sum.txt
     sources:
       - "Project-86-Launcher-{{.VERSION}}.zip"
-      - "Project-86-Launcher-{{.VERSION}}.exe"
-      - "run.bat"
+      - "Project-86-Launcher.exe"
       - "p86l.ico"
       - "p86l.png"
     generates:
