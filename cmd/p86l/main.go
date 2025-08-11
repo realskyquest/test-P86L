@@ -79,11 +79,6 @@ func main() {
 			}
 		}
 	} else {
-		if err := p86l.RotateLogFiles(fs.Root, fs.CompanyDirPath, fs.PathDirLogs()); err != nil {
-			fmt.Println("Log rotation warning: %w", err)
-			os.Exit(1)
-		}
-
 		logFile, err := p86l.NewLogFile(fs.Root, fs.PathDirLogs())
 		if err != nil {
 			fmt.Println("Failed to create new log file: %w", err)
@@ -94,6 +89,11 @@ func main() {
 				fmt.Println("Failed to close log file: %w", err)
 			}
 		}()
+
+		if err := p86l.RotateLogFiles(fs.Root, fs.CompanyDirPath, fs.PathDirLogs()); err != nil {
+			fmt.Println("Log rotation warning: %w", err)
+			os.Exit(1)
+		}
 
 		multi := zerolog.MultiLevelWriter(os.Stdout, logFile)
 		newLog := zerolog.New(multi).With().Timestamp().Logger()
