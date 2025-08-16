@@ -91,7 +91,7 @@ func (p *ProgressTracker) PrintProgress() {
 		humanize.Bytes(uint64(speed)),
 		remainingStr,
 	)
-	p.model.SetProgress(output)
+	p.model.Play().SetProgress(output)
 
 	// Print newline when done.
 	if p.currentSize == p.totalSize {

@@ -23,6 +23,7 @@ package debug
 
 const (
 	UnknownManager = "UnknownManager"
+	AppManager     = "AppManager"
 	ErrorManager   = "ErrorManager"
 	FileManager    = "FileManager"
 	NetworkManager = "NetworkManager"

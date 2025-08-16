@@ -21,13 +21,11 @@
 
 package p86l
 
-import "github.com/google/go-github/v71/github"
-
 type Model struct {
-	mode     string
-	progress string
+	mode string
 
-	ratelimit RatelimitModel
+	rateLimit RateLimitModel
+	play      PlayModel
 	app       AppModel
 	data      DataModel
 	cache     CacheModel
@@ -42,20 +40,12 @@ func (m *Model) Mode() string {
 	return m.mode
 }
 
-func (m *Model) Progress() string {
-	return m.progress
-}
-
 // -- Setters for Model --
 
 func (m *Model) SetMode(mode string) {
 	d := m.app.Debug()
 	d.Log().Info().Str("Page", mode).Msg("Sidebar")
 	m.mode = mode
-}
-
-func (m *Model) SetProgress(progress string) {
-	m.progress = progress
 }
 
 func (m *Model) GameExecutablePath() string {
@@ -73,8 +63,12 @@ func (m *Model) App() *AppModel {
 	return &m.app
 }
 
-func (m *Model) Ratelimit() *RatelimitModel {
-	return &m.ratelimit
+func (m *Model) RateLimits() *RateLimitModel {
+	return &m.rateLimit
+}
+
+func (m *Model) Play() *PlayModel {
+	return &m.play
 }
 
 func (m *Model) Data() *DataModel {
@@ -87,23 +81,14 @@ func (m *Model) Cache() *CacheModel {
 
 // -- RatelimitModel --
 
-type RatelimitModel struct {
+type RateLimitModel struct {
 	progress bool
-	limit    *github.RateLimits
 }
 
-func (r *RatelimitModel) Progress() bool {
+func (r *RateLimitModel) Progress() bool {
 	return r.progress
 }
 
-func (r *RatelimitModel) Limit() *github.RateLimits {
-	return r.limit
-}
-
-func (r *RatelimitModel) SetProgress(value bool) {
+func (r *RateLimitModel) SetProgress(value bool) {
 	r.progress = value
-}
-
-func (r *RatelimitModel) SetLimit(value *github.RateLimits) {
-	r.limit = value
 }

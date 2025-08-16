@@ -146,9 +146,10 @@ func (s *sidebarStats) Build(context *guigui.Context) error {
 	model := context.Model(s, modelKeyModel).(*p86l.Model)
 	am := model.App()
 	dm := am.Debug()
-	rlm := model.Ratelimit()
+	play := model.Play()
+	cache := model.Cache()
 
-	s.progressText.SetValue(model.Progress())
+	s.progressText.SetValue(play.Progress())
 	s.progressText.SetAutoWrap(true)
 
 	if toast := dm.Toast(); toast != nil {
@@ -164,7 +165,7 @@ func (s *sidebarStats) Build(context *guigui.Context) error {
 	s.versionText.SetHorizontalAlign(basicwidget.HorizontalAlignCenter)
 	s.versionText.SetVerticalAlign(basicwidget.VerticalAlignMiddle)
 
-	if limit := rlm.Limit(); limit == nil {
+	if limit := cache.File().RateLimit; limit == nil {
 		s.ratelimitText.SetValue("...")
 	} else {
 		rLeft := limit.Core.Remaining

@@ -23,6 +23,7 @@ package p86l
 
 import (
 	"archive/zip"
+	"crypto/tls"
 	"fmt"
 	"io"
 	"net/http"
@@ -32,179 +33,278 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/dustin/go-humanize"
 )
 
 func DownloadGame(model *Model, filename, src string, preRelease bool) pd.Result {
 	am := model.App()
 	fs := am.FileSystem()
+	play := model.Play()
 	gameType := "game"
 	if preRelease {
 		gameType = "pregame"
 	}
 
-	model.SetProgress("Downloading...")
+	play.SetProgress("Downloading...")
 	zipName := fmt.Sprintf("%s.zip", gameType)
-	result := DownloadFile(model, filename, src, zipName)
-	if !result.Ok {
-		model.SetProgress("")
-		return result
+
+	err := DownloadFile(
+		src,
+		filepath.Join(fs.CompanyDirPath, zipName),
+		5,
+		func(d, t int64, s float64) {
+			var remainingStr string
+			if s > 0 {
+				remaining := float64(t-d) / s
+				remainingDuration := time.Duration(remaining) * time.Second
+				remainingStr = humanize.RelTime(time.Now(), time.Now().Add(remainingDuration), "remaining", "ago")
+			} else {
+				remainingStr = "calculating..."
+			}
+
+			output := fmt.Sprintf("Downloading %s: %s/%s @ %s/s, %s",
+				filename,
+				humanize.Bytes(uint64(d)),
+				humanize.Bytes(uint64(t)),
+				humanize.Bytes(uint64(s)),
+				remainingStr,
+			)
+			play.SetProgress(output)
+		},
+	)
+	if err != nil {
+		play.SetProgress("")
+		return pd.NotOk(pd.New(err, pd.NetworkError, pd.ErrNetworkDownloadRequest))
 	}
 
-	model.SetProgress("Removing old files...")
+	play.SetProgress("Removing old files...")
 	gameDir := filepath.Join(fs.CompanyDirPath, "build", gameType)
 	if err := os.RemoveAll(gameDir); err != nil {
-		model.SetProgress("")
+		play.SetProgress("")
 		return pd.NotOk(pd.New(err, pd.FSError, pd.ErrFSDirRemove))
 	}
 
-	model.SetProgress("Extracting...")
+	play.SetProgress("Extracting...")
 	srcPath := filepath.Join(fs.CompanyDirPath, zipName)
 	if result := unzipToDir(model, srcPath, gameDir); !result.Ok {
-		model.SetProgress("")
+		play.SetProgress("")
 		return result
 	}
 
-	model.SetProgress("Cleaning...")
+	play.SetProgress("Cleaning...")
 	if err := fs.Root.Remove(zipName); err != nil {
-		model.SetProgress("")
+		play.SetProgress("")
 		return pd.NotOk(pd.New(err, pd.FSError, pd.ErrFSRootFileRemove))
 	}
 
-	model.SetProgress("")
+	play.SetProgress("")
 	return pd.Ok()
 }
 
-func DownloadFile(model *Model, filename, src, dest string) pd.Result {
-	am := model.App()
-	fs := am.FileSystem()
-	dm := am.Debug()
+type ProgressFunc func(downloaded, total int64, speed float64)
 
-	// Try to get existing file size for resume
-	resumePos := int64(0)
-	if info, err := fs.Root.Stat(dest); err == nil {
-		resumePos = info.Size()
+type progressReader struct {
+	reader     io.Reader
+	total      *int64 // Pointer to external downloaded counter
+	startSize  int64
+	startTime  time.Time
+	totalRead  int64
+	onProgress func(speed float64)
+}
+
+func (pr *progressReader) Read(p []byte) (int, error) {
+	n, err := pr.reader.Read(p)
+	if n > 0 {
+		pr.totalRead += int64(n)
+		*pr.total = pr.startSize + pr.totalRead
+
+		// Calculate speed and report progress
+		duration := time.Since(pr.startTime).Seconds()
+		if duration > 0.1 { // Avoid division by zero and excessive updates
+			speed := float64(pr.totalRead) / duration
+			pr.onProgress(speed)
+		}
+	}
+	return n, err
+}
+
+// isProtocolError checks if error is a stream PROTOCOL_ERROR
+func isProtocolError(err error) bool {
+	return strings.Contains(err.Error(), "PROTOCOL_ERROR")
+}
+
+func DownloadFile(downloadURL, filePath string, maxRetries int, progress ProgressFunc) error {
+	// Get target filename from URL if not specified
+	if filePath == "" {
+		filePath = filepath.Base(downloadURL)
 	}
 
-	// Verify if resume is possible
-	if resumePos > 0 {
-		headReq, err := http.NewRequest("HEAD", src, nil)
+	// Create HTTP clients
+	clientHTTP2 := &http.Client{}
+	clientHTTP11 := &http.Client{
+		Transport: &http.Transport{
+			TLSNextProto: make(map[string]func(authority string, c *tls.Conn) http.RoundTripper),
+		},
+	}
+
+	currentClient := clientHTTP2
+	retryDelay := 2 * time.Second
+	var file *os.File
+
+	// Track download metrics
+	var (
+		fileSize   int64
+		totalSize  int64 = -1
+		downloaded int64
+	)
+
+	// Get initial file size for resume
+	if info, err := os.Stat(filePath); err == nil {
+		fileSize = info.Size()
+		downloaded = fileSize
+	}
+
+	// Parse total size from Content-Range header
+	parseTotalSize := func(header http.Header) {
+		cr := header.Get("Content-Range")
+		if cr == "" {
+			return
+		}
+		parts := strings.Split(cr, "/")
+		if len(parts) < 2 {
+			return
+		}
+		if size, err := strconv.ParseInt(parts[1], 10, 64); err == nil {
+			totalSize = size
+		}
+	}
+
+	// Progress reporter helper
+	reportProgress := func(speed float64) {
+		if progress != nil {
+			progress(downloaded, totalSize, speed)
+		}
+	}
+
+	// Initial progress report
+	reportProgress(0)
+
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		// Create request
+		req, err := http.NewRequest("GET", downloadURL, nil)
 		if err != nil {
-			return pd.NotOk(pd.New(err, pd.NetworkError, pd.ErrNetworkDownloadRequest))
+			return fmt.Errorf("request creation failed: %w", err)
 		}
 
-		client := &http.Client{}
-		resp, err := client.Do(headReq)
+		// Set resume headers if needed
+		if downloaded > 0 {
+			req.Header.Set("Range", fmt.Sprintf("bytes=%d-", downloaded))
+		}
+
+		// Execute request
+		resp, err := currentClient.Do(req)
 		if err != nil {
-			return pd.NotOk(pd.New(err, pd.NetworkError, pd.ErrNetworkDownloadRequest))
-		}
-		defer func() {
-			if err := resp.Body.Close(); err != nil {
-				dm.SetToast(pd.New(err, pd.NetworkError, pd.ErrNetworkBodyClose), pd.NetworkManager)
+			if isProtocolError(err) && currentClient == clientHTTP2 {
+				currentClient = clientHTTP11 // Switch to HTTP/1.1
 			}
-		}()
-
-		if resp.StatusCode != http.StatusOK {
-			return pd.NotOk(pd.New(fmt.Errorf("bad HEAD status: %s", resp.Status), pd.NetworkError, pd.ErrNetworkStatusNotOk))
+			if attempt < maxRetries {
+				time.Sleep(retryDelay)
+				retryDelay *= 2
+				continue
+			}
+			return fmt.Errorf("request failed: %w", err)
 		}
 
-		// File is already complete
-		if resp.ContentLength > 0 && resumePos == resp.ContentLength {
-			return pd.Ok()
+		fmt.Println("Download retry", attempt)
+
+		// Handle response status
+		switch resp.StatusCode {
+		case http.StatusOK:
+			if totalSize == -1 {
+				totalSize = resp.ContentLength
+			}
+		case http.StatusPartialContent:
+			parseTotalSize(resp.Header)
+		case http.StatusRequestedRangeNotSatisfiable:
+			resp.Body.Close()
+			reportProgress(0)
+			return nil // Already downloaded
+		default:
+			resp.Body.Close()
+			return fmt.Errorf("unexpected HTTP status: %s", resp.Status)
 		}
 
-		// Server doesn't support resume
-		if resp.Header.Get("Accept-Ranges") != "bytes" {
-			resumePos = 0 // Force full download
-		}
-	}
-
-	// Open file for writing
-	var out io.WriteCloser
-	var err error
-	if resumePos > 0 {
-		out, err = fs.Root.OpenFile(dest, os.O_WRONLY|os.O_APPEND, 0644)
-	} else {
-		// For full download, remove existing file if it exists
-		if err := fs.Root.Remove(dest); err != nil && !os.IsNotExist(err) {
-			return pd.NotOk(pd.New(err, pd.FSError, pd.ErrFSRootFileRemove))
-		}
-		out, err = fs.Root.Create(dest)
-	}
-	if err != nil {
-		return pd.NotOk(pd.New(err, pd.FSError, pd.ErrFSRootFileNew))
-	}
-	defer func() {
-		if err := out.Close(); err != nil {
-			dm.SetToast(pd.New(err, pd.FSError, pd.ErrFSRootFileClose), pd.FileManager)
-		}
-	}()
-
-	// Create request
-	req, err := http.NewRequest("GET", src, nil)
-	if err != nil {
-		return pd.NotOk(pd.New(err, pd.NetworkError, pd.ErrNetworkDownloadRequest))
-	}
-	if resumePos > 0 {
-		req.Header.Set("Range", fmt.Sprintf("bytes=%d-", resumePos))
-	}
-
-	// Execute request
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return pd.NotOk(pd.New(err, pd.NetworkError, pd.ErrNetworkDownloadRequest))
-	}
-	defer func() {
-		if err := resp.Body.Close(); err != nil {
-			dm.SetToast(pd.New(err, pd.FSError, pd.ErrFSRootFileClose), pd.FileManager)
-		}
-	}()
-
-	// Validate status
-	expectedStatus := http.StatusOK
-	if resumePos > 0 {
-		expectedStatus = http.StatusPartialContent
-	}
-	if resp.StatusCode != expectedStatus {
-		return pd.NotOk(pd.New(
-			fmt.Errorf("unexpected status: %s (expected %d)", resp.Status, expectedStatus),
-			pd.NetworkError,
-			pd.ErrNetworkStatusNotOk,
-		))
-	}
-
-	// Determine total size
-	totalSize := resp.ContentLength
-	if resumePos > 0 {
-		if cr := resp.Header.Get("Content-Range"); cr != "" {
-			parts := strings.Split(cr, "/")
-			if len(parts) == 2 {
-				if size, err := strconv.ParseInt(parts[1], 10, 64); err == nil {
-					totalSize = size
-				}
+		// Open file in appropriate mode
+		if file == nil {
+			if downloaded > 0 && resp.StatusCode == http.StatusPartialContent {
+				file, err = os.OpenFile(filePath, os.O_APPEND|os.O_WRONLY, 0644)
+			} else {
+				file, err = os.Create(filePath)
+			}
+			if err != nil {
+				resp.Body.Close()
+				return fmt.Errorf("file creation failed: %w", err)
 			}
 		}
-	}
 
-	// Set up progress tracking
-	p := &ProgressTracker{
-		model:       model,
-		filename:    filename,
-		totalSize:   totalSize,
-		currentSize: resumePos,
-		startTime:   time.Now(),
-	}
-
-	// Stream to file
-	if _, err := io.Copy(out, io.TeeReader(resp.Body, p)); err != nil {
-		// Clean up partial file on error
-		if resumePos == 0 {
-			_ = fs.Root.Remove(dest)
+		// Create progress reader
+		startTime := time.Now()
+		progressReader := &progressReader{
+			reader:     resp.Body,
+			total:      &downloaded,
+			startSize:  downloaded,
+			startTime:  startTime,
+			onProgress: reportProgress,
 		}
-		return pd.NotOk(pd.New(err, pd.FSError, pd.ErrFSRootFileWrite))
+
+		// Download the file
+		_, err = io.Copy(file, progressReader)
+
+		// Close response body and handle error
+		respCloseErr := resp.Body.Close()
+		if err == nil {
+			err = respCloseErr
+		}
+
+		if err == nil {
+			// Final progress report
+			if progressReader.totalRead > 0 {
+				duration := time.Since(startTime).Seconds()
+				speed := float64(progressReader.totalRead) / duration
+				reportProgress(speed)
+			} else {
+				reportProgress(0)
+			}
+			break
+		}
+
+		// Handle copy errors
+		if isProtocolError(err) && currentClient == clientHTTP2 {
+			currentClient = clientHTTP11 // Switch to HTTP/1.1
+		}
+
+		// Update downloaded size for next attempt
+		if pos, err := file.Seek(0, io.SeekCurrent); err == nil {
+			downloaded = pos
+		}
+
+		if attempt < maxRetries {
+			reportProgress(0)
+			time.Sleep(retryDelay)
+			retryDelay *= 2
+			continue
+		}
+		return fmt.Errorf("download failed: %w", err)
 	}
 
-	return pd.Ok()
+	// Close file and return any error
+	if file != nil {
+		if err := file.Close(); err != nil {
+			return fmt.Errorf("file close error: %w", err)
+		}
+	}
+	return nil
 }
 
 func unzipToDir(model *Model, src, dest string) pd.Result {

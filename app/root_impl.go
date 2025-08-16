@@ -22,16 +22,12 @@
 package app
 
 import (
-	"context"
 	"image"
 	"p86l"
 	"p86l/assets"
-	"p86l/configs"
 	pd "p86l/internal/debug"
 	"sync"
-	"time"
 
-	"github.com/google/go-github/v71/github"
 	"github.com/hajimehoshi/guigui"
 	"github.com/hajimehoshi/guigui/basicwidget"
 	"github.com/hajimehoshi/guigui/layout"
@@ -193,72 +189,3 @@ func (r *rootPopupContent) Build(context *guigui.Context) error {
 	return nil
 }
 
-// -- Channels --
-
-type ratelimitResult struct {
-	result pd.Result
-	limit  *github.RateLimits
-}
-
-type githubResult struct {
-	result     pd.Result
-	release    *github.RepositoryRelease
-	prerelease *github.RepositoryRelease
-}
-
-func (r *Root) fetchRatelimit() {
-	am := r.model.App()
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	limit, _, err := am.GithubClient().RateLimit.Get(ctx)
-
-	if err != nil {
-		r.rlResult <- ratelimitResult{
-			result: pd.NotOk(pd.New(err, pd.NetworkError, pd.ErrNetworkRateLimitInvalid)),
-			limit:  nil,
-		}
-		return
-	}
-	r.rlResult <- ratelimitResult{
-		result: pd.Ok(),
-		limit:  limit,
-	}
-}
-
-func (r *Root) fetchLatestCache() {
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-
-	result, release, prerelease := r.getCacheItems(ctx)
-
-	if !result.Ok {
-		r.ghResult <- githubResult{
-			result:     result,
-			release:    nil,
-			prerelease: nil,
-		}
-		return
-	}
-	r.ghResult <- githubResult{
-		result:     pd.Ok(),
-		release:    release,
-		prerelease: prerelease,
-	}
-}
-
-func (r *Root) getCacheItems(ctx context.Context) (pd.Result, *github.RepositoryRelease, *github.RepositoryRelease) {
-	am := r.model.App()
-
-	release, _, err := am.GithubClient().Repositories.GetLatestRelease(ctx, configs.RepoOwner, configs.RepoName)
-	if err != nil {
-		return pd.NotOk(pd.New(err, pd.NetworkError, pd.ErrNetworkLatestInvalid)), nil, nil
-	}
-
-	result, prerelease := p86l.GetPreRelease(am)
-	if !result.Ok {
-		return result, nil, nil
-	}
-
-	return pd.Ok(), release, prerelease
-}

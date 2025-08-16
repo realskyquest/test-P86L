@@ -76,9 +76,6 @@ type playContent struct {
 	box3   basicwidget.Background
 	height int
 
-	prProgress bool
-	prResult   chan prereleaseResult
-
 	sync   sync.Once
 	result pd.Result
 }
@@ -103,7 +100,6 @@ func (p *playContent) Build(context *guigui.Context) error {
 
 	p.sync.Do(func() {
 		p.result = pd.Ok()
-		p.prResult = make(chan prereleaseResult, 1)
 	})
 
 	if !p.result.Ok {
@@ -111,26 +107,12 @@ func (p *playContent) Build(context *guigui.Context) error {
 		return p.result.Err.Error()
 	}
 
-	// TODO: Move this to Root
-	select {
-	case prResult := <-p.prResult:
-		p.prProgress = false
-		if !prResult.result.Ok {
-			dm.SetToast(prResult.result.Err, pd.FileManager)
-		}
-	default:
-
-	}
-
 	p.prereleaseText.SetValue(am.T("settings.prerelease"))
 	p.prereleaseToggle.SetOnValueChanged(func(value bool) {
 		if value == data.File().UsePreRelease {
 			return
 		}
-		if !p.prProgress {
-			p.prProgress = true
-			go p.handlePrerelease(model, value)
-		}
+		data.SetUsePreRelease(dm, value)
 	})
 	if data.File().UsePreRelease {
 		p.prereleaseToggle.SetValue(true)
@@ -178,17 +160,7 @@ type playButtons struct {
 	guigui.DefaultWidget
 
 	buttons [4]basicwidget.Button
-
-	height int
-
-	progress      bool
-	progressMutex sync.Mutex
-
-	gFResult   chan gameFileResult
-	lRResult   chan launcherReleaseResult
-	gFProgress bool
-
-	sync sync.Once
+	height  int
 }
 
 func (p *playButtons) AppendChildWidgets(context *guigui.Context, appender *guigui.ChildWidgetAppender) {
@@ -200,26 +172,21 @@ func (p *playButtons) AppendChildWidgets(context *guigui.Context, appender *guig
 func (p *playButtons) Build(context *guigui.Context) error {
 	model := context.Model(p, modelKeyModel).(*p86l.Model)
 	am := model.App()
-	dm := am.Debug()
+	//dm := am.Debug()
 	data := model.Data()
-	cache := model.Cache()
-
-	p.sync.Do(func() {
-		p.gFResult = make(chan gameFileResult, 1)
-		p.lRResult = make(chan launcherReleaseResult, 1)
-
-		go p.fetchLauncherRelease(model)
-	})
+	//cache := model.Cache()
+	play := model.Play()
 
 	buttonTexts := []string{"play.install", "play.update", "play.play", "play.launcher"}
 	buttonActions := []func(){
-		func() { go p.handleGameDownload(model, "handleInstall") },
-		func() { go p.handleGameDownload(model, "handleUpdate") },
-		func() { go p.handlePlay() },
-		func() { go p.handleLauncher() },
+		func() { go play.HandleGameDownload(model, "handleInstall") },
+		func() { go play.HandleGameDownload(model, "handleUpdate") },
+		func() { go play.HandlePlay(model) },
+		func() { go play.HandlePlay(model) },
 	}
 
 	for i := range p.buttons {
+		// Text
 		if t := buttonTexts[i]; t == "play.install" {
 			if data.File().UsePreRelease {
 				p.buttons[i].SetText(am.T("play.prerelease"))
@@ -229,89 +196,30 @@ func (p *playButtons) Build(context *guigui.Context) error {
 		} else {
 			p.buttons[i].SetText(am.T(t))
 		}
+		// Actions
 		p.buttons[i].SetOnDown(buttonActions[i])
-	}
 
-	for range 2 {
-		select {
-		case gFResult := <-p.gFResult: // Handle game files.
-			p.gFProgress = false
+		for range 1 {
+			select {
+			case availableResult := <-play.GameAvailable().Available:
+				play.SetGameAvailable(model, false, false)
+				context.SetEnabled(&p.buttons[0], !availableResult) // Install
+				context.SetEnabled(&p.buttons[2], availableResult)  // Play
 
-			for i := range p.buttons {
-				switch i {
-				case 0: // Install
-					if gFResult.gameFile {
-						context.SetEnabled(&p.buttons[i], false)
-					} else {
-						context.SetEnabled(&p.buttons[i], true)
-					}
-				case 1: // Update
-					if !gFResult.gameFile {
-						context.SetEnabled(&p.buttons[i], false)
-					} else {
-						if !cache.IsValid() {
-							context.SetEnabled(&p.buttons[i], false)
-						} else {
-							if data.File().GameVersion == "" {
-								context.SetEnabled(&p.buttons[i], false)
-							} else {
-								if result, uValue := p86l.CheckNewerVersion(data.File().GameVersion, cache.File().Repo.GetTagName()); !result.Ok {
-									context.SetEnabled(&p.buttons[i], false)
-									dm.SetToast(result.Err, pd.FileManager)
-								} else {
-									if uValue {
-										context.SetEnabled(&p.buttons[i], true)
-									} else {
-										context.SetEnabled(&p.buttons[i], false)
-									}
-								}
-							}
-						}
-					}
-				case 2: // Play
-					if gFResult.gameFile {
-						context.SetEnabled(&p.buttons[i], true)
-					} else {
-						context.SetEnabled(&p.buttons[i], false)
-					}
-				}
-			}
-		case lRResult := <-p.lRResult: // Handle launcher update.
-			// TODO: Move to once?
-			// Since we gonna check for updates once, when the app/play page is opened only.
-			if !lRResult.result.Ok {
-				context.SetEnabled(&p.buttons[3], false)
-				dm.SetToast(lRResult.result.Err, pd.NetworkManager)
-			} else {
-				if launcherVersion := am.PlainVersion(); launcherVersion == "dev" {
-					context.SetEnabled(&p.buttons[3], false)
+				if !availableResult { // Update
+					context.SetEnabled(&p.buttons[1], false)
 				} else {
-					if result, lValue := p86l.CheckNewerVersion(launcherVersion, lRResult.release.GetTagName()); !result.Ok {
-						context.SetEnabled(&p.buttons[3], false)
-						dm.SetToast(result.Err, pd.FileManager)
-					} else {
-						if lValue {
-							context.SetEnabled(&p.buttons[3], true)
-						} else {
-							context.SetEnabled(&p.buttons[3], false)
-						}
-					}
+					canUpdate := play.CanUpdate(model)
+					context.SetEnabled(&p.buttons[1], canUpdate)
 				}
+			default:
+
 			}
-		default:
-
 		}
-	}
 
-	for i := range p.buttons {
-		if p.progress {
+		if !play.CanInteract() {
 			context.SetEnabled(&p.buttons[i], false)
 		}
-	}
-
-	if !p.gFProgress {
-		p.gFProgress = true
-		go p.handleGameFile(model)
 	}
 
 	var (
@@ -343,7 +251,7 @@ func (p *playButtons) Build(context *guigui.Context) error {
 			{5, 0},
 			{7, 0},
 		}
-	case breakSize(context, 700):
+	case breakSize(context, 600):
 		widths = []layout.Size{
 			layout.FlexibleSize(1),
 			layout.FlexibleSize(1),
@@ -389,7 +297,7 @@ func (p *playButtons) Build(context *guigui.Context) error {
 	switch {
 	case breakSize(context, 900):
 		p.height = gl.CellBounds(positions[0].Get()).Dy()
-	case breakSize(context, 700):
+	case breakSize(context, 600):
 		p.height = gl.CellBounds(positions[0].Get()).Dy()*2 + u/2
 	default:
 		p.height = gl.CellBounds(positions[0].Get()).Dy()*4 + int(float64(u)*1.5)

@@ -31,7 +31,6 @@ import (
 	"runtime"
 	"slices"
 	"sync"
-	"time"
 
 	"golang.org/x/text/language"
 
@@ -63,10 +62,6 @@ type Root struct {
 	popup         basicwidget.Popup
 	popupContent  rootPopupContent
 
-	lastTick int64
-	rlResult chan ratelimitResult
-	ghResult chan githubResult
-
 	model p86l.Model
 
 	locales           []language.Tag
@@ -92,8 +87,8 @@ func NewRoot(version string) (pd.Result, *Root, *p86l.Model) {
 func (r *Root) runApp() pd.Result {
 	am := r.model.App()
 
-	r.rlResult = make(chan ratelimitResult, 1)
-	r.ghResult = make(chan githubResult, 1)
+	r.model.Cache().Load()
+	r.model.Play().Load(&r.model)
 
 	iconImages, err1 := assets.GetIconImages()
 	bundle, err2 := p86lLocale.GetLocales(language.English)
@@ -264,13 +259,11 @@ func (r *Root) Build(context *guigui.Context) error {
 }
 
 func (r *Root) Tick(context *guigui.Context) error {
-	am := r.model.App()
-	dm := am.Debug()
-	log := dm.Log()
-	rlm := r.model.Ratelimit()
+	play := r.model.Play()
 	data := r.model.Data()
 	cache := r.model.Cache()
 
+	// Save current window data.
 	x, y := ebiten.WindowPosition()
 	width, height := ebiten.WindowSize()
 	maximized := ebiten.IsWindowMaximized()
@@ -280,44 +273,11 @@ func (r *Root) Tick(context *guigui.Context) error {
 	}
 	data.File().WindowMaximize = maximized
 
-	for range 2 {
-		select {
-		case rlResult := <-r.rlResult:
-			rlm.SetProgress(false)
-			if !rlResult.result.Ok {
-				dm.SetToast(rlResult.result.Err, pd.NetworkManager)
-				rlm.SetLimit(nil)
-			} else {
-				rlm.SetLimit(rlResult.limit)
-			}
-		case ghResult := <-r.ghResult:
-			cache.SetProgress(false)
-			if !ghResult.result.Ok {
-				dm.SetToast(ghResult.result.Err, pd.NetworkManager)
-			} else {
-				cache.SetRepos(am, ghResult.release, ghResult.prerelease, data.File().Locale)
-			}
-		default:
-
-		}
+	if !play.GameAvailable().Progress {
+		go play.SetGameAvailable(&r.model, false, true)
 	}
 
-	currentTick := ebiten.Tick()
-	if currentTick-r.lastTick >= int64(ebiten.TPS()*5) {
-		r.lastTick = currentTick
-
-		if cache.IsValid() && ((!rlm.Progress() && rlm.Limit() == nil) || (rlm.Limit() != nil && time.Now().After(rlm.Limit().Core.Reset.Time))) {
-			rlm.SetProgress(true)
-			log.Info().Str("Ratelimit", "ratelimit refresh triggered").Msg(pd.NetworkManager)
-			go r.fetchRatelimit()
-		}
-
-		if !cache.Progress() && !cache.IsValid() || !cache.IsTimestampValid() {
-			cache.SetProgress(true)
-			log.Info().Str("Cache", "cache refresh triggered").Msg(pd.NetworkManager)
-			go r.fetchLatestCache()
-		}
-	}
+	cache.Update(&r.model)
 
 	return nil
 }

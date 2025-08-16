@@ -140,6 +140,7 @@ func (d *Debug) SetLog(logger *zerolog.Logger) {
 
 func (d *Debug) SetToast(err *Error, manager string) {
 	if err == nil {
+		d.toast = nil
 		return
 	}
 	if d.toast == nil || !d.toast.Equal(err) {
@@ -153,6 +154,7 @@ func (d *Debug) SetToast(err *Error, manager string) {
 
 func (d *Debug) SetPopup(err *Error, manager string) {
 	if err == nil {
+		d.popup = nil
 		return
 	}
 	if d.popup == nil || !d.popup.Equal(err) {

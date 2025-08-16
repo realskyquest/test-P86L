@@ -62,6 +62,7 @@ func (d *Data) Log(dm *pd.Debug) {
 
 type Cache struct {
 	V         int                       `json:"v"`
+	RateLimit *github.RateLimits        `json:"ratelimit"`
 	Repo      *github.RepositoryRelease `json:"repo"`
 	PreRepo   *github.RepositoryRelease `json:"prerelease_repo"`
 	Timestamp time.Time                 `json:"time_stamp"`

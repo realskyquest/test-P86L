@@ -221,9 +221,9 @@ func (s *settingsContent) Build(context *guigui.Context) error {
 		}
 	})
 	s.cacheButton.SetOnDown(func() {
+		dm.Log().Info().Str("settingsContent", "cacheButton.SetOnDown").Msg(pd.AppManager)
 		cache.SetValid(false)
-		cache.SetProgress(false)
-		model.Ratelimit().SetLimit(nil)
+		cache.Fetch(model)
 	})
 
 	s.form.SetItems([]basicwidget.FormItem{
