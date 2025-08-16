@@ -115,7 +115,6 @@ func (h *homeContent) Build(context *guigui.Context) error {
 	am := model.App()
 	data := model.Data()
 	cache := model.Cache()
-	cacheAssets := cache.File().Repo.Assets
 
 	img, err := assets.TheImageCache.Get("p86l")
 
@@ -172,6 +171,7 @@ func (h *homeContent) Build(context *guigui.Context) error {
 	h.versionText.SetValue(am.T("home.version"))
 
 	if cache.IsValid() {
+		cacheAssets := cache.File().Repo.Assets
 		for _, asset := range cacheAssets {
 			if name := asset.GetName(); p86l.IsValidGameFile(name) {
 				h.countText.SetValue(humanize.FormatInteger("#,###.", asset.GetDownloadCount()))
