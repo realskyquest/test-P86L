@@ -72,11 +72,17 @@ func (p *Play) Build(context *guigui.Context, adder *guigui.ChildAdder) error {
 		if dataFile.UsePreRelease {
 			gameAvail = model.CheckFilesCached(p86l.PathGamePreRelease)
 			currentVersion = dataFile.InstalledPreRelease
-			latestVersion = cacheFile.Releases.PreRelease.TagName
+
+			if cacheFile.Releases != nil {
+				latestVersion = cacheFile.Releases.PreRelease.TagName
+			}
 		} else {
 			gameAvail = model.CheckFilesCached(p86l.PathGameStable)
 			currentVersion = dataFile.InstalledGame
-			latestVersion = cacheFile.Releases.Stable.TagName
+
+			if cacheFile.Releases != nil {
+				latestVersion = cacheFile.Releases.Stable.TagName
+			}
 		}
 
 		if currentVersion != "" {
