@@ -58,6 +58,11 @@ type Root struct {
 	settings Settings
 	about    About
 
+	toastBackground basicwidget.Background
+	toastForm       basicwidget.Form
+	toastPanel      basicwidget.Panel
+	toastText       basicwidget.Text
+
 	backgroundImageSize     image.Point
 	backgroundImagePosition image.Point
 
@@ -75,7 +80,7 @@ func NewRoot(VERSION string) (*Root, *p86l.Model, *file.Filesystem, *zerolog.Log
 		return nil, nil, nil, nil, nil, err
 	}
 
-	logger, logFiles, noFS, noAPI, err := log.NewLogger(VERSION, fs.Root())
+	logger, logCapture, logFiles, noFS, noAPI, err := log.NewLogger(VERSION, fs.Root())
 	if err != nil {
 		return nil, nil, nil, nil, nil, err
 	}
@@ -90,7 +95,7 @@ func NewRoot(VERSION string) (*Root, *p86l.Model, *file.Filesystem, *zerolog.Log
 		return nil, nil, nil, nil, nil, err
 	}
 
-	model := p86l.NewModel(logger, fs, player)
+	model := p86l.NewModel(logger, logCapture, fs, player)
 
 	if !noFS {
 		dataSubModel := p86l.NewDataSubModel(model)
@@ -189,6 +194,14 @@ func (r *Root) Build(context *guigui.Context, adder *guigui.ChildAdder) error {
 		adder.AddChild(content)
 	}
 
+	captureText := r.model.LogCaptureText()
+
+	if captureText != "" {
+		adder.AddChild(&r.toastBackground)
+		adder.AddChild(&r.toastForm)
+		adder.AddChild(&r.toastPanel)
+	}
+
 	var err error
 	r.sync.Do(func() {
 		if context.ColorMode() == guigui.ColorModeDark {
@@ -262,6 +275,12 @@ func (r *Root) Build(context *guigui.Context, adder *guigui.ChildAdder) error {
 			-1,
 		)
 	}
+
+	r.toastText.SetValue(captureText)
+
+	r.toastPanel.SetContent(&r.toastText)
+	r.toastPanel.SetAutoBorder(true)
+	r.toastPanel.SetContentConstraints(basicwidget.PanelContentConstraintsFixedHeight)
 
 	r.updateFontFaceSources(context)
 
@@ -340,4 +359,54 @@ func (r *Root) Layout(context *guigui.Context, widgetBounds *guigui.WidgetBounds
 			},
 		},
 	}).LayoutWidgets(context, widgetBounds.Bounds(), layouter)
+
+	(guigui.LinearLayout{
+		Direction: guigui.LayoutDirectionVertical,
+		Items: []guigui.LinearLayoutItem{
+			{
+				Size: guigui.FlexibleSize(1),
+			},
+			{
+				Size: guigui.FixedSize(int(float64(u) * 1.5)),
+				Layout: guigui.LinearLayout{
+					Direction: guigui.LayoutDirectionHorizontal,
+					Items: []guigui.LinearLayoutItem{
+						{
+							Size: guigui.FlexibleSize(1),
+						},
+						{
+							Widget: &r.toastBackground,
+							Size:   guigui.FlexibleSize(2),
+							Layout: guigui.LinearLayout{
+								Direction: guigui.LayoutDirectionVertical,
+								Items: []guigui.LinearLayoutItem{
+									{
+										Widget: &r.toastForm,
+										Size:   guigui.FixedSize(int(float64(u) * 1.5)),
+										Layout: guigui.LinearLayout{
+											Direction: guigui.LayoutDirectionVertical,
+											Items: []guigui.LinearLayoutItem{
+												{
+													Widget: &r.toastPanel,
+													Size:   guigui.FixedSize(u),
+												},
+											},
+											Padding: guigui.Padding{
+												Start: u / 4,
+												Top:   u / 4,
+												End:   u / 4,
+											},
+										},
+									},
+								},
+							},
+						},
+						{
+							Size: guigui.FlexibleSize(1),
+						},
+					},
+				},
+			},
+		},
+	}.LayoutWidgets(context, widgetBounds.Bounds(), layouter))
 }

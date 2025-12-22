@@ -51,9 +51,13 @@ type Model struct {
 	subModels []SubModel
 
 	logger           *zerolog.Logger
+	logCapture       *log.LogCapture
 	fs               *file.Filesystem
 	bgmPlayer        *audio.Player
 	googleTranslator *translator.Translator
+
+	logCaptureText    string
+	oldLogCaptureText string
 
 	uiRefreshFn func()
 	syncDataFn  func(m *Model, value bool) error
@@ -79,7 +83,7 @@ type Model struct {
 	fileAvailMutex, uiRefreshFnMutex sync.RWMutex
 }
 
-func NewModel(logger *zerolog.Logger, fs *file.Filesystem, bgmPlayer *audio.Player) *Model {
+func NewModel(logger *zerolog.Logger, logCapture *log.LogCapture, fs *file.Filesystem, bgmPlayer *audio.Player) *Model {
 	ctx, cancel := context.WithCancel(context.Background())
 	dataPath := filepath.Join(configs.AppName, configs.FileData)
 	cachePath := filepath.Join(configs.AppName, configs.FileCache)
@@ -99,6 +103,7 @@ func NewModel(logger *zerolog.Logger, fs *file.Filesystem, bgmPlayer *audio.Play
 		cancel:                cancel,
 		subModels:             make([]SubModel, 0),
 		logger:                logger,
+		logCapture:            logCapture,
 		fs:                    fs,
 		bgmPlayer:             bgmPlayer,
 		googleTranslator:      translator.New(),
@@ -168,13 +173,31 @@ func (m *Model) Start() {
 	go func() {
 		defer m.wg.Done()
 		logger.Info().Str(log.BackgroundLoop, log.Starting).Msg(log.AppManager.String())
+
+		captureLogLifetimeTicker := time.NewTicker(time.Second * 6)
+		defer captureLogLifetimeTicker.Stop()
+
 		for {
 			select {
+			case <-captureLogLifetimeTicker.C:
+				msg := m.logCapture.Msg()
+
+				m.LogCaptureText(msg)
+
+				if m.oldLogCaptureText == msg {
+					m.LogCaptureText("")
+				}
+
+				m.oldLogCaptureText = msg
 			case <-m.ctx.Done():
 				logger.Info().Str(log.BackgroundLoop, log.Stopped).Msg(log.AppManager.String())
 
 				if err := m.saveData(); err != nil {
 					logger.Warn().Str(log.BackgroundLoop, "failed to save data on shutdown").Err(err).Msg(log.ErrorManager.String())
+				}
+
+				if err := m.saveCache(); err != nil {
+					m.logger.Warn().Str(log.BackgroundLoop, "failed to save cache on shutdown").Err(err).Msg(log.ErrorManager.String())
 				}
 
 				return
@@ -193,6 +216,24 @@ func (m *Model) OpenPath(path string) {
 func (m *Model) OpenURL(url string) {
 	m.logger.Info().Str("open url", url).Msg(log.AppManager.String())
 	m.fs.Open(url)
+}
+
+func (m *Model) LogCaptureText(value ...string) string {
+	if len(value) > 0 {
+		m.progressMutex.Lock()
+		defer m.progressMutex.Unlock()
+		m.logCaptureText = value[0]
+
+		refreshFn := m.uiRefreshFn
+		if refreshFn != nil {
+			refreshFn()
+		}
+	} else {
+		m.progressMutex.RLock()
+		defer m.progressMutex.RUnlock()
+	}
+
+	return m.logCaptureText
 }
 
 // Use for single purpose-only, dual will mess with mutex.
@@ -354,7 +395,11 @@ func NewCacheSubModel(model *Model) *CacheSubModel {
 }
 
 func (c *CacheSubModel) getRefreshInterval() time.Duration {
-	resetTime := c.model.Cache().Get().RateLimit.Reset
+	cacheFile := c.model.cache.Get()
+	if cacheFile.RateLimit == nil {
+		return minRefreshInterval
+	}
+	resetTime := cacheFile.RateLimit.Reset
 	if resetTime <= 0 {
 		return defaultRefreshInterval
 	}
@@ -393,12 +438,6 @@ func (c *CacheSubModel) Start(ctx context.Context, wg *sync.WaitGroup) {
 			select {
 			case <-ctx.Done():
 				c.logger.Info().Str(log.BackgroundLoop, log.Stopped).Msg(log.AppManager.String())
-
-				// Save cache before stopping
-				if err := c.model.saveCache(); err != nil {
-					c.logger.Warn().Str(log.BackgroundLoop, "failed to save cache on shutdown").Err(err).Msg(log.ErrorManager.String())
-				}
-
 				return
 			case <-rateLimitTicker.C:
 				c.logger.Info().Str(log.Lifecycle, "time to refresh ratelimit cache").Msg(log.NetworkManager.String())

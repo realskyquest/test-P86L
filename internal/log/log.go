@@ -22,12 +22,15 @@
 package log
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"p86l/configs"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -75,6 +78,53 @@ const (
 	Stopped  = "stopped"
 )
 
+type LogCapture struct {
+	mu       sync.RWMutex
+	output   io.Writer
+	lastWarn map[string]any
+}
+
+func NewLogCapture(output io.Writer) *LogCapture {
+	return &LogCapture{
+		output: output,
+	}
+}
+
+func (c *LogCapture) Write(p []byte) (n int, err error) {
+	var entry map[string]any
+	if json.Unmarshal(p, &entry) == nil {
+		level, _ := entry["level"].(string)
+
+		c.mu.Lock()
+		switch level {
+		case "warn":
+			c.lastWarn = entry
+		}
+		c.mu.Unlock()
+	}
+
+	return c.output.Write(p)
+}
+
+func (c *LogCapture) formatEntry(entry map[string]any) string {
+	msg, _ := entry["message"].(string)
+	errStr, _ := entry["error"].(string)
+
+	levelTag := "[WARN]"
+
+	if errStr != "" {
+		return fmt.Sprintf("%s %s (%s)", levelTag, msg, errStr)
+	}
+	return ""
+	//return fmt.Sprintf("%s %s", levelTag, msg)
+}
+
+func (c *LogCapture) Msg() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.formatEntry(c.lastWarn)
+}
+
 // -- errors --
 
 var (
@@ -113,7 +163,9 @@ func newLogFile(root *os.Root, path string) (*os.File, *os.File, error) {
 	return main, latest, nil
 }
 
-func NewLogger(VERSION string, fs *os.Root) (*zerolog.Logger, []*os.File, bool, bool, error) {
+func NewLogger(VERSION string, fs *os.Root) (*zerolog.Logger, *LogCapture, []*os.File, bool, bool, error) {
+	capture := NewLogCapture(io.Discard)
+
 	switch VERSION {
 	case "dev":
 		var saveLogs, disableFS, disableAPI bool
@@ -144,27 +196,28 @@ func NewLogger(VERSION string, fs *os.Root) (*zerolog.Logger, []*os.File, bool, 
 			if saveLogs {
 				mainLogFile, latestLogFile, err := newLogFile(fs, filepath.Join(configs.AppName, configs.FolderLogs))
 				if err != nil {
-					return nil, nil, disableFS, false, err
+					return nil, nil, nil, disableFS, false, err
 				}
 				logFiles = []*os.File{mainLogFile, latestLogFile}
 
-				multiWriter := zerolog.MultiLevelWriter(lcw, mainLogFile, latestLogFile)
+				multiWriter := zerolog.MultiLevelWriter(lcw, capture, mainLogFile, latestLogFile)
 				logger = zerolog.New(multiWriter).With().Timestamp().Logger()
 			} else {
-				logger = zerolog.New(lcw).With().Timestamp().Logger()
+				multiWriter := zerolog.MultiLevelWriter(lcw, capture)
+				logger = zerolog.New(multiWriter).With().Timestamp().Logger()
 			}
 		}
 
 		logger.Info().Bool("Debug", true).Msg(AppManager.String())
-		return &logger, logFiles, disableFS, disableAPI, nil
+		return &logger, capture, logFiles, disableFS, disableAPI, nil
 	default:
 		mainLogFile, latestLogFile, err := newLogFile(fs, filepath.Join(configs.AppName, configs.FolderLogs))
 		if err != nil {
-			return nil, nil, false, false, err
+			return nil, nil, nil, false, false, err
 		}
 
-		multiWriter := zerolog.MultiLevelWriter(os.Stdout, mainLogFile, latestLogFile)
+		multiWriter := zerolog.MultiLevelWriter(os.Stdout, capture, mainLogFile, latestLogFile)
 		logger := zerolog.New(multiWriter).With().Timestamp().Logger()
-		return &logger, []*os.File{mainLogFile, latestLogFile}, false, false, nil
+		return &logger, capture, []*os.File{mainLogFile, latestLogFile}, false, false, nil
 	}
 }
