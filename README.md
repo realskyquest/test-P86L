@@ -1,19 +1,34 @@
-# Project-86-Launcher
+
+# Project 86 Launcher
 
 **A Launcher developed for Project-86-Community-Game for managing game files.**
 
 > [!CAUTION]
 > **This launcher is an alpha version.**
+## Installation
 
+Use the [Github releases](https://github.com/Project-86-Community/Project-86-Launcher/releases) to install the launcher.
 ## Features
 
 - View total play time & last played time
-- Download game & update
+- Install game & update
 - Access to pre-release versions
 - View changelog
 - Multiple languages supported
 
-userfiles in `C:users/<MyUser>/AppData/Roaming/Project-86-Community`
+## Support
 
-<img width="803" height="480" alt="playp86l" src="https://github.com/user-attachments/assets/a1d45c44-b88d-4390-ae27-afd81f89ff35" />
-<img width="803" height="480" alt="homep86l" src="https://github.com/user-attachments/assets/0f80f7a5-4582-4485-9a10-b581e37e49af" />
+For support, join our [discord server](https://discord.gg/A8Fr6yEsUn).
+
+
+## Contributing
+
+We are not open to contributions yet.
+
+## Acknowledgements
+
+ - Taliayaya - Lead developer
+ - realskyquest - Launcher developer
+## License
+
+[GPLv3](https://choosealicense.com/licenses/gpl-3.0/)
