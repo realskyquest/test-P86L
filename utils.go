@@ -44,8 +44,8 @@ import (
 )
 
 var (
-	PathGameStable     = filepath.Join(configs.FolderBuild, configs.FolderGame, configs.FileGame)
-	PathGamePreRelease = filepath.Join(configs.FolderBuild, configs.FolderPreRelease, configs.FileGame)
+	PathGameStable     = filepath.Join(configs.FolderBuilds, configs.FolderStable, configs.FileGame)
+	PathGamePreRelease = filepath.Join(configs.FolderBuilds, configs.FolderPreRelease, configs.FileGame)
 )
 
 func GetIcons() ([]image.Image, error) {
@@ -174,10 +174,10 @@ func GameVersionText(cache CacheFile, usePreRelease bool) string {
 func ReleasesDownloadCountText(cache CacheFile, usePreRelease bool) string {
 	if cache.Releases != nil {
 		if usePreRelease {
-			_, debugGameAsset := GetAssets(cache.Releases.PreRelease.Assets)
-			return fmt.Sprintf("%d", debugGameAsset.DownloadCount)
+			gameAsset := GetAssets(cache.Releases.PreRelease.Assets)
+			return fmt.Sprintf("%d", gameAsset.DownloadCount)
 		}
-		gameAsset, _ := GetAssets(cache.Releases.Stable.Assets)
+		gameAsset := GetAssets(cache.Releases.Stable.Assets)
 		return fmt.Sprintf("%d", gameAsset.DownloadCount)
 	}
 
@@ -187,31 +187,33 @@ func ReleasesDownloadCountText(cache CacheFile, usePreRelease bool) string {
 func isGameFile(filename string) bool {
 	return strings.Contains(filename, "Project86-v") &&
 		strings.Contains(filename, ".zip") &&
-		!strings.Contains(filename, "dev")
+		!strings.Contains(filename, "dev") &&
+		!strings.Contains(filename, "linux") &&
+		!strings.Contains(filename, "macOS")
 }
 
-func isDebugGameFile(filename string) bool {
+func isPrereleaseGameFile(filename string) bool {
 	return strings.Contains(filename, "Project86-v") &&
 		strings.Contains(filename, ".zip") &&
-		strings.Contains(filename, "dev")
+		!strings.Contains(filename, "linux") &&
+		!strings.Contains(filename, "macOS")
 }
 
-func GetAssets(assets []github.ReleaseAsset) (*github.ReleaseAsset, *github.ReleaseAsset) {
+func GetAssets(assets []github.ReleaseAsset) *github.ReleaseAsset {
 	var gameAsset *github.ReleaseAsset
-	var debugGameAsset *github.ReleaseAsset
 
 	for _, asset := range assets {
 		switch {
 		case isGameFile(asset.Name):
 			gameAsset = &asset
 			continue
-		case isDebugGameFile(asset.Name):
-			debugGameAsset = &asset
+		case isPrereleaseGameFile(asset.Name):
+			gameAsset = &asset
 			continue
 		}
 	}
 
-	return gameAsset, debugGameAsset
+	return gameAsset
 }
 
 // current, new

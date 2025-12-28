@@ -32,7 +32,6 @@ import (
 	"p86l/internal/github"
 	"p86l/internal/log"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"syscall"
 	"time"
@@ -191,31 +190,26 @@ func (m *Model) installOrUpdate(isUpdate bool) {
 
 	if dataFile.UsePreRelease {
 		downloadRelease = cacheFile.Releases.PreRelease
-		_, debugGameAsset := GetAssets(downloadRelease.Assets)
-		downloadAsset = debugGameAsset
+		gameAsset := GetAssets(downloadRelease.Assets)
+		downloadAsset = gameAsset
 		resumeVersion = dataFile.PreReleaseVersion
 
-		gamePath = filepath.Join(configs.FolderBuild, configs.FolderPreRelease)
+		gamePath = filepath.Join(configs.FolderBuilds, configs.FolderPreRelease)
 	} else {
 		downloadRelease = cacheFile.Releases.Stable
-		gameAsset, _ := GetAssets(downloadRelease.Assets)
+		gameAsset := GetAssets(downloadRelease.Assets)
 		downloadAsset = gameAsset
 		resumeVersion = dataFile.GameVersion
 
-		gamePath = filepath.Join(configs.FolderBuild, configs.FolderGame)
+		gamePath = filepath.Join(configs.FolderBuilds, configs.FolderStable)
 	}
 
 	gameTag = downloadRelease.TagName
 
-	if isUpdate {
-		gamePath = configs.FolderBuild
-		if dataFile.UsePreRelease {
-			zipPath = filepath.Join(gamePath, configs.FileUpdatePreRelease)
-		} else {
-			zipPath = filepath.Join(gamePath, configs.FileUpdateGame)
-		}
+	if dataFile.UsePreRelease {
+		zipPath = filepath.Join(configs.FolderTemp, configs.FilePrereleaseZip)
 	} else {
-		zipPath = filepath.Join(gamePath, configs.FileBuild)
+		zipPath = filepath.Join(configs.FolderTemp, configs.FileStableZip)
 	}
 
 	// Will delete the game file that's partially downloaded, if a newer version of game came out.
@@ -253,6 +247,7 @@ func (m *Model) installOrUpdate(isUpdate bool) {
 		}
 	})
 
+	// Download builds.
 	m.logger.Info().Str(log.Lifecycle, fmt.Sprintf("downloading file to %s", filepath.Join(m.fs.Path(), zipPath))).Msg(log.FileManager.String())
 	if err := m.downloadGame(filepath.Join(m.fs.Path(), zipPath), gameTag, downloadAsset); err != nil {
 		m.ProgressText(fmt.Sprintf("%s %v", T("model_play.fail_asset"), err))
@@ -268,14 +263,13 @@ func (m *Model) installOrUpdate(isUpdate bool) {
 	m.ProgressText(T("model_play.install_unzip"))
 	time.Sleep(2 * time.Second)
 
+	// Removes builds if there is a update.
 	if isUpdate {
 		var updatePath string
 		if dataFile.UsePreRelease {
-			gamePath = filepath.Join(configs.FolderBuild, configs.FolderPreRelease)
-			updatePath = filepath.Join(configs.FolderBuild, configs.FolderPreRelease)
+			updatePath = filepath.Join(configs.FolderBuilds, configs.FolderPreRelease)
 		} else {
-			gamePath = filepath.Join(configs.FolderBuild, configs.FolderGame)
-			updatePath = filepath.Join(configs.FolderBuild, configs.FolderGame)
+			updatePath = filepath.Join(configs.FolderBuilds, configs.FolderStable)
 		}
 
 		if err := m.fs.Root().RemoveAll(updatePath); err != nil {
@@ -287,6 +281,7 @@ func (m *Model) installOrUpdate(isUpdate bool) {
 
 	}
 
+	// Unzip the files to builds.
 	m.logger.Info().Str(log.Lifecycle, "unzipping files").Msg(log.FileManager.String())
 	if err := m.unzipGame(filepath.Join(m.fs.Path(), zipPath), gamePath); err != nil {
 		mErr := T("model_play.fail_unzip")
@@ -335,13 +330,7 @@ func (m *Model) handlePlay() {
 	path := filepath.Join(m.fs.Path(), exePath)
 
 	// TODO: proper linux support?
-	// NOTE: future releases have a native linux build.
-	var cmd *exec.Cmd
-	if runtime.GOOS == "linux" {
-		cmd = exec.Command("wine", path)
-	} else {
-		cmd = exec.Command(path)
-	}
+	cmd := exec.Command(path)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 

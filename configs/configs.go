@@ -36,20 +36,21 @@ const (
 	RepoName  = "Project-86"
 
 	FolderLogs = "logs"
-	FileData   = "data.json"
-	FileCache  = "cache.json"
 
-	FolderBuild      = "build"
+	FileData  = "data.json"
+	FileCache = "cache.json"
+
+	FolderBuilds     = "builds"
+	FolderTemp       = "temp"
 	FolderPreRelease = "prerelease"
-	FolderGame       = "game"
-	FileBuild        = "build.zip"
-	FileGame         = "Project-86.exe"
+	FolderStable     = "stable"
 
-	FileUpdateGame       = "update-g.zip"
-	FileUpdatePreRelease = "update-p.zip"
+	FileStableZip     = "stable-build.zip"
+	FilePrereleaseZip = "prerelease-build.zip"
+	FileGame          = "Project-86.exe"
 
 	Website = "https://project-86-community.github.io/Project-86-Website/"
 	Github  = "https://github.com/Taliayaya/Project-86"
-	Discord = "https://discord.gg/A8Fr6yEsUn"
+	Discord = "https://discord.com/invite/Yh2TQH97yA"
 	Patreon = "https://www.patreon.com/project86"
 )

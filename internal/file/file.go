@@ -66,10 +66,13 @@ func NewFilesystem(extra ...string) (*Filesystem, error) {
 		companyPath = defaultPath
 	}
 
-	if err := mkdirAll(filepath.Join(companyPath, configs.FolderBuild, configs.FolderGame)); err != nil {
+	if err := mkdirAll(filepath.Join(companyPath, configs.FolderTemp)); err != nil {
 		return nil, err
 	}
-	if err := mkdirAll(filepath.Join(companyPath, configs.FolderBuild, configs.FolderPreRelease)); err != nil {
+	if err := mkdirAll(filepath.Join(companyPath, configs.FolderBuilds, configs.FolderStable)); err != nil {
+		return nil, err
+	}
+	if err := mkdirAll(filepath.Join(companyPath, configs.FolderBuilds, configs.FolderPreRelease)); err != nil {
 		return nil, err
 	}
 
