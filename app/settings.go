@@ -67,10 +67,10 @@ func (s *Settings) Build(context *guigui.Context, adder *guigui.ChildAdder) erro
 			Text:  "English",
 			Value: language.English,
 		},
-		{
-			Text:  "French",
-			Value: language.French,
-		},
+		// {
+		// 	Text:  "French",
+		// 	Value: language.French,
+		// },
 	})
 	s.languageSelect.SetOnItemSelected(func(context *guigui.Context, index int) {
 		item, ok := s.languageSelect.ItemByIndex(index)
